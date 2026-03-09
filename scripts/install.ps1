@@ -161,6 +161,8 @@ if (-not $downloadSucceeded) {
 Write-Section ($(if ($isUpdate) { "Update complete!" } else { "Install complete!" }))
 Write-Host "Project: $ProjectDir"
 Write-Host "Storage: $StorageDir"
+Write-Host "Selected embedding model: $ModelName"
+Write-Host "Local install model config: $(Join-Path $StorageDir 'install_config.json')"
 Write-Host ""
 Write-Host "Next steps:"
 if ($isUpdate) {
@@ -172,3 +174,4 @@ else {
 }
 Write-Host "2) Verify connection: claude mcp list"
 Write-Host "3) In Claude Code: index this codebase"
+Write-Host "4) To switch embedding models later, set CODE_SEARCH_MODEL and re-run this installer"

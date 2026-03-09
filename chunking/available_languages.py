@@ -86,4 +86,10 @@ def get_availiable_language():
     except ImportError:
         logger.debug("tree-sitter-markdown not installed")
 
+    try:
+        import tree_sitter_kotlin as tskotlin
+        res['kotlin'] = Language(tskotlin.language())
+    except ImportError:
+        logger.debug("tree-sitter-kotlin not installed")
+
     return res

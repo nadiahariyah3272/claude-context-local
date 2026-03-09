@@ -122,8 +122,11 @@ class MultiLanguageChunker:
                 'mod_item': 'module',  # Rust
                 'macro_definition': 'macro',  # Rust
                 'constructor_declaration': 'constructor',  # Java/C#
+                'secondary_constructor': 'constructor',  # Kotlin
                 'destructor_declaration': 'destructor',  # C#
                 'property_declaration': 'property',  # C#
+                'object_declaration': 'object',  # Kotlin
+                'companion_object': 'object',  # Kotlin
                 'event_declaration': 'event',  # C#
                 'template_declaration': 'template',  # C++
                 'concept_definition': 'concept',  # C++
@@ -136,6 +139,9 @@ class MultiLanguageChunker:
             }
             
             chunk_type = chunk_type_map.get(tchunk.node_type, tchunk.node_type)
+            declaration_kind = tchunk.metadata.get('declaration_kind')
+            if declaration_kind in {'interface', 'enum', 'object', 'property'}:
+                chunk_type = declaration_kind
             
             # Extract parent name and adjust chunk type for methods
             parent_name = tchunk.metadata.get('parent_name')

@@ -27,6 +27,9 @@ class TestMultiLanguageChunker:
         assert chunker.is_supported("test.tsx")
         assert chunker.is_supported("test.svelte")
         assert chunker.is_supported("test.java")
+        assert chunker.is_supported("test.kt")
+        assert chunker.is_supported("test.kts")
+        assert chunker.is_supported("test.md")
         assert chunker.is_supported("test.go")
         assert chunker.is_supported("test.c")
         assert chunker.is_supported("test.cpp")
@@ -113,6 +116,21 @@ class TestMultiLanguageChunker:
         assert "MathOperations" in chunk_names
         assert "Operation" in chunk_names
         assert any(t in chunk_types for t in ["class", "interface", "enum"])
+
+    def test_chunk_kotlin_file(self, chunker, test_data_dir):
+        """Test chunking Kotlin file."""
+        file_path = test_data_dir / "Calculator.kt"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        chunk_types = {chunk.chunk_type for chunk in chunks}
+
+        assert "Calculator" in chunk_names
+        assert "MathOperations" in chunk_names
+        assert "Operation" in chunk_names
+        assert "version" in chunk_names
+        assert any(t in chunk_types for t in ["class", "interface", "enum", "property", "function", "constructor"])
     
     def test_chunk_go_file(self, chunker, test_data_dir):
         """Test chunking Go file."""
@@ -179,3 +197,16 @@ class TestMultiLanguageChunker:
         
         assert any(name in chunk_names for name in ["Calculator", "calculate_sum", "MathOperations", "Operation", "Point"])
         assert any(t in chunk_types for t in ["function", "struct", "trait", "enum", "impl", "macro"])
+
+    def test_chunk_markdown_file(self, chunker, test_data_dir):
+        """Test chunking Markdown file."""
+        file_path = test_data_dir / "README.md"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        chunk_types = {chunk.chunk_type for chunk in chunks}
+
+        assert "Overview" in chunk_names
+        assert "Kotlin Support" in chunk_names
+        assert "section" in chunk_types

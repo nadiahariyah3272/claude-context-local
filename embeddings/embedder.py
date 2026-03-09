@@ -1,15 +1,16 @@
-"""Code embedding wrapper using EmbeddingGemma model."""
+"""Code embedding wrapper with install-time model selection."""
 
 import logging
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import os
 import numpy as np
 
 from chunking.code_chunk import CodeChunk
 from embeddings.embedding_models_register import AVAILIABLE_MODELS
+from embeddings.model_catalog import DEFAULT_EMBEDDING_MODEL, EmbeddingModelConfig, get_model_config
 from embeddings.sentence_transformer import SentenceTransformerModel
-from common_utils import get_storage_dir
+from common_utils import get_storage_dir, load_local_install_config
 
 
 @dataclass
@@ -20,8 +21,37 @@ class EmbeddingResult:
     metadata: Dict[str, Any]
 
 
+def _resolve_model_config(model_name: Optional[str]) -> EmbeddingModelConfig:
+    """Resolve the selected embedding model from args, env, or local install config."""
+    if model_name:
+        return get_model_config(model_name)
+
+    env_model_name = os.getenv("CODE_SEARCH_MODEL")
+    if env_model_name:
+        return get_model_config(env_model_name)
+
+    install_config = load_local_install_config()
+    configured_model = install_config.get("embedding_model")
+
+    if isinstance(configured_model, str):
+        return get_model_config(configured_model)
+
+    if isinstance(configured_model, dict):
+        selected_model_name = configured_model.get("model_name", DEFAULT_EMBEDDING_MODEL)
+        config = get_model_config(selected_model_name)
+        return replace(
+            config,
+            document_prompt_name=configured_model.get("document_prompt_name", config.document_prompt_name),
+            query_prompt_name=configured_model.get("query_prompt_name", config.query_prompt_name),
+            document_prefix=configured_model.get("document_prefix", config.document_prefix),
+            query_prefix=configured_model.get("query_prefix", config.query_prefix),
+        )
+
+    return get_model_config(DEFAULT_EMBEDDING_MODEL)
+
+
 class CodeEmbedder:
-    """Wrapper for embedding code chunks using EmbeddingGemma model."""
+    """Wrapper for embedding code chunks using the configured local embedding model."""
 
     def __init__(
         self,
@@ -36,7 +66,8 @@ class CodeEmbedder:
             cache_dir: Directory to cache the model
             device: Device to load model on
         """
-        model_name = model_name or os.getenv("CODE_SEARCH_MODEL", "google/embeddinggemma-300m")
+        self.model_config = _resolve_model_config(model_name)
+        model_name = self.model_config.model_name
         if not cache_dir: # if not provided, use default
             cache_dir = str(get_storage_dir() / "models")
         self.device = device
@@ -45,21 +76,18 @@ class CodeEmbedder:
         model_class = AVAILIABLE_MODELS.get(model_name)
         if model_class:
             self._model = model_class(cache_dir=cache_dir, device=device)
-        elif model_name.startswith("google/embeddinggemma-"):
+        elif model_name and model_name.strip():
             self._model = SentenceTransformerModel(
                 model_name=model_name,
                 cache_dir=cache_dir,
                 device=device
             )
         else:
-            available_models = ", ".join(sorted(AVAILIABLE_MODELS))
-            raise ValueError(
-                f"Unsupported embedding model '{model_name}'. Supported defaults: {available_models}. "
-                "You may also set CODE_SEARCH_MODEL to another compatible EmbeddingGemma variant."
-            )
+            raise ValueError("Embedding model name must not be empty.")
 
         self._logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.INFO)
+        self._logger.info(f"Using embedding model: {model_name}")
 
     @property
     def model(self):
@@ -134,10 +162,11 @@ class CodeEmbedder:
         content = self.create_embedding_content(chunk)
 
         # Encode using model with proper prompt
-        embedding = self._model.encode(
+        embedding = self._encode_texts(
             [content],
-            prompt_name="Retrieval-document",
-            show_progress_bar=False
+            prompt_name=self.model_config.document_prompt_name,
+            prefix=self.model_config.document_prefix,
+            show_progress_bar=False,
         )[0]
 
         # Create chunk ID
@@ -189,9 +218,10 @@ class CodeEmbedder:
             batch_contents = [self.create_embedding_content(chunk) for chunk in batch]
 
             # Generate embeddings for batch
-            batch_embeddings = self._model.encode(
+            batch_embeddings = self._encode_texts(
                 batch_contents,
-                prompt_name="Retrieval-document",
+                prompt_name=self.model_config.document_prompt_name,
+                prefix=self.model_config.document_prefix,
                 show_progress_bar=False
             )
 
@@ -239,12 +269,28 @@ class CodeEmbedder:
         Returns:
             Embedding vector
         """
-        embedding = self._model.encode(
+        embedding = self._encode_texts(
             [query],
-            prompt_name="InstructionRetrieval",
-            show_progress_bar=False
+            prompt_name=self.model_config.query_prompt_name,
+            prefix=self.model_config.query_prefix,
+            show_progress_bar=False,
         )[0]
         return embedding
+
+    def _encode_texts(
+        self,
+        texts: List[str],
+        *,
+        prompt_name: Optional[str] = None,
+        prefix: str = "",
+        **kwargs,
+    ) -> np.ndarray:
+        """Encode texts with optional prompt names or prefixes."""
+        prepared_texts = [f"{prefix}{text}" if prefix else text for text in texts]
+        encode_kwargs = dict(kwargs)
+        if prompt_name:
+            encode_kwargs["prompt_name"] = prompt_name
+        return self._model.encode(prepared_texts, **encode_kwargs)
 
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about the embedding model.
