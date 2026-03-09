@@ -99,12 +99,22 @@ class IncrementalIndexer:
         
         if not project_name:
             project_name = Path(project_path).name
+
+        indexing_config = self.chunker.get_indexing_config_signature()
         
         try:
             # Check if we should do full index
             if force_full or not self.snapshot_manager.has_snapshot(project_path):
                 logger.info(f"Performing full index for {project_name}")
-                return self._full_index(project_path, project_name, start_time)
+                return self._full_index(project_path, project_name, start_time, indexing_config)
+
+            snapshot_metadata = self.snapshot_manager.load_metadata(project_path) or {}
+            if snapshot_metadata.get('indexing_config') != indexing_config:
+                logger.info(
+                    "Indexing configuration changed for %s; performing a full reindex to remove stale chunks.",
+                    project_name,
+                )
+                return self._full_index(project_path, project_name, start_time, indexing_config)
             
             # Detect changes
             logger.info(f"Detecting changes in {project_name}")
@@ -138,10 +148,12 @@ class IncrementalIndexer:
                 'incremental_update': True,
                 'files_added': len(changes.added),
                 'files_removed': len(changes.removed),
-                'files_modified': len(changes.modified)
+                'files_modified': len(changes.modified),
+                'indexing_config': indexing_config,
             })
             
             # Update index
+            self.indexer.set_indexing_config(indexing_config)
             self.indexer.save_index()
             
             return IncrementalIndexResult(
@@ -171,7 +183,8 @@ class IncrementalIndexer:
         self,
         project_path: str,
         project_name: str,
-        start_time: float
+        start_time: float,
+        indexing_config: Optional[Dict] = None,
     ) -> IncrementalIndexResult:
         """Perform full indexing of a project.
         
@@ -186,6 +199,7 @@ class IncrementalIndexer:
         try:
             # Clear existing index
             self.indexer.clear_index()
+            self.indexer.set_indexing_config(indexing_config)
             
             # Build DAG for all files
             dag = MerkleDAG(project_path)
@@ -230,7 +244,8 @@ class IncrementalIndexer:
                 'full_index': True,
                 'total_files': len(all_files),
                 'supported_files': len(supported_files),
-                'chunks_indexed': chunks_added
+                'chunks_indexed': chunks_added,
+                'indexing_config': indexing_config or {},
             })
             
             # Save index

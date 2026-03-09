@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Remote installer for Claude Code Local Context
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
 
-REPO_URL="https://github.com/FarhanAliRaza/claude-context-local"
+REPO_URL="https://github.com/nadiahariyah3272/claude-context-local"
 PROJECT_DIR="${HOME}/.local/share/claude-context-local"
 STORAGE_DIR="${CODE_SEARCH_STORAGE:-${HOME}/.claude_code_search}"
 MODEL_NAME="${CODE_SEARCH_MODEL:-google/embeddinggemma-300m}"

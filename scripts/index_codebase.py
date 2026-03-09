@@ -35,7 +35,8 @@ def main():
             "  %(prog)s . --storage-dir /custom/location\n"
             "\n"
             "Supported languages: Python, JavaScript, TypeScript, Java, Kotlin, Go,\n"
-            "Rust, C, C++, C#, Markdown, Svelte (18 file extensions total).\n"
+            "Rust, C, C++, C#, Markdown, Svelte, YAML, TOML, and JSON (22 file extensions total).\n"
+            "Use .claude-context-local.json or CODE_SEARCH_EXCLUDE_EXTENSIONS to skip noisy file types.\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -96,6 +97,7 @@ def main():
         # Initialize components
         logger.info("Initializing components...")
         chunker = MultiLanguageChunker(str(directory_path))
+        indexing_config = chunker.get_indexing_config_signature()
         
         # Initialize embedder with cache in storage directory
         models_dir = storage_dir / "models"
@@ -105,18 +107,26 @@ def main():
         # Initialize index manager
         index_dir = storage_dir / "index"
         index_manager = CodeIndexManager(str(index_dir))
+        existing_stats = index_manager.get_stats()
         
         # Clear existing index if requested
         if args.clear:
             logger.info("Clearing existing index...")
             index_manager.clear_index()
+        elif existing_stats.get('indexing_config') != indexing_config:
+            logger.info(
+                "Indexing configuration changed; clearing the existing index so excluded or oversized files are removed."
+            )
+            index_manager.clear_index()
+
+        index_manager.set_indexing_config(indexing_config)
         
         # Chunk the codebase
         logger.info("Parsing and chunking source files...")
-        chunks = chunker.chunk_directory()
+        chunks = chunker.chunk_directory(str(directory_path))
         
         if not chunks:
-            supported = ", ".join(sorted(chunker.SUPPORTED_EXTENSIONS))
+            supported = ", ".join(sorted(chunker.supported_extensions))
             logger.error(f"No supported source files found or no chunks extracted. Supported extensions: {supported}")
             sys.exit(1)
         

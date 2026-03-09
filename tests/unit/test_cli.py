@@ -12,6 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from scripts.cli import (
+    _get_storage_dir_or_report,
     cmd_doctor,
     cmd_help,
     cmd_paths,
@@ -72,6 +73,37 @@ class TestCLICommands:
         assert "Setup Guide" in out
         assert "Install" in out
         assert "Register the MCP server" in out
+
+    def test_get_storage_dir_or_report_handles_failure(self, capsys):
+        """Storage helper should report errors and return None."""
+        with patch("scripts.cli.get_storage_dir", side_effect=RuntimeError("storage unavailable")):
+            result = _get_storage_dir_or_report("status")
+
+        out = capsys.readouterr().out
+        assert result is None
+        assert "status could not access the storage directory" in out
+        assert "storage unavailable" in out
+        assert "CODE_SEARCH_STORAGE" in out
+
+    def test_status_handles_unwritable_storage_dir(self, capsys):
+        """status command should fail gracefully when storage is not writable."""
+        with patch("scripts.cli.get_storage_dir", side_effect=RuntimeError("storage unavailable")):
+            cmd_status()
+
+        out = capsys.readouterr().out
+        assert "status could not access the storage directory" in out
+        assert "CODE_SEARCH_STORAGE" in out
+
+    def test_status_returns_before_project_lookup_when_storage_missing(self, capsys):
+        """status should stop immediately when storage resolution fails."""
+        with patch("scripts.cli._get_storage_dir_or_report", return_value=None) as helper:
+            with patch("pathlib.Path.is_dir", side_effect=AssertionError("should not inspect directories")):
+                with patch("pathlib.Path.iterdir", side_effect=AssertionError("should not enumerate directories")):
+                    cmd_status()
+
+        out = capsys.readouterr().out
+        helper.assert_called_once_with("status")
+        assert "Index Status" in out
 
     def test_unknown_command_exits_with_error(self):
         """An unknown command should exit with code 1."""

@@ -11,6 +11,7 @@ import platform
 import shutil
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add the parent directory to the path so we can import our modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -44,6 +45,19 @@ def red(text: str) -> str:
 
 def cyan(text: str) -> str:
     return _clr("36", text)
+
+
+def _get_storage_dir_or_report(command_name: str) -> Optional[Path]:
+    """Return the storage directory or print actionable guidance."""
+    try:
+        return get_storage_dir()
+    except RuntimeError as exc:
+        print(f"{red('✗')} {command_name} could not access the storage directory.")
+        print(f"  {exc}")
+        if "CODE_SEARCH_STORAGE" not in str(exc):
+            print(f"  Set {cyan('CODE_SEARCH_STORAGE')} to a writable path and try again.")
+        print()
+        return None
 
 
 # ── Platform helpers ──────────────────────────────────────────────────
@@ -170,10 +184,18 @@ def cmd_version() -> None:
 
 def cmd_paths() -> None:
     """Show all paths used by the tool."""
-    storage = get_storage_dir()
     install_dir = get_default_install_dir()
-
     print(bold("Paths used by Claude Context Local\n"))
+    storage = _get_storage_dir_or_report("paths")
+
+    if storage is None:
+        print(f"  {yellow('—')} Install directory:       {install_dir}")
+        print(f"  {yellow('—')} Storage-dependent paths are unavailable until {cyan('CODE_SEARCH_STORAGE')} points to a writable location.")
+        print(f"\n{bold('Claude config locations (checked in order):')}")
+        for p in get_claude_config_paths():
+            marker = green("✓") if p.is_file() else yellow("—")
+            print(f"  {marker} {p}")
+        return
 
     rows = [
         ("Storage directory", str(storage), storage.is_dir()),
@@ -197,6 +219,7 @@ def cmd_doctor() -> None:
     """Run diagnostic checks and report problems."""
     print(bold("Running diagnostics…\n"))
     issues = []
+    storage = _get_storage_dir_or_report("doctor")
 
     # 1. Python version
     py = sys.version_info
@@ -224,31 +247,40 @@ def cmd_doctor() -> None:
         issues.append(msg)
 
     # 4. Storage directory
-    storage = get_storage_dir()
-    if storage.is_dir():
+    if storage and storage.is_dir():
         print(f"  {green('✓')} Storage directory exists: {storage}")
     else:
-        msg = f"Storage directory not found: {storage}"
+        msg = "Storage directory unavailable – set CODE_SEARCH_STORAGE to a writable path"
         print(f"  {red('✗')} {msg}")
         issues.append(msg)
 
     # 5. Install config
-    config = load_local_install_config()
-    if config:
-        model = config.get("embedding_model", {})
-        model_name = model.get("model_name", "unknown") if isinstance(model, dict) else (model or "unknown")
-        print(f"  {green('✓')} Install config found (model: {model_name})")
+    if storage:
+        config = load_local_install_config(storage_dir=storage)
+        if config:
+            model = config.get("embedding_model", {})
+            model_name = model.get("model_name", "unknown") if isinstance(model, dict) else (model or "unknown")
+            print(f"  {green('✓')} Install config found (model: {model_name})")
+        else:
+            msg = "No install_config.json found – run the installer first"
+            print(f"  {yellow('!')} {msg}")
+            issues.append(msg)
     else:
-        msg = "No install_config.json found – run the installer first"
+        msg = "Install config unavailable because the storage directory is not writable"
         print(f"  {yellow('!')} {msg}")
         issues.append(msg)
 
     # 6. Models directory
-    models_dir = storage / "models"
-    if models_dir.is_dir() and any(models_dir.iterdir()):
-        print(f"  {green('✓')} Models cached in: {models_dir}")
+    if storage:
+        models_dir = storage / "models"
+        if models_dir.is_dir() and any(models_dir.iterdir()):
+            print(f"  {green('✓')} Models cached in: {models_dir}")
+        else:
+            msg = "No models cached yet – the embedding model needs to be downloaded"
+            print(f"  {yellow('!')} {msg}")
+            issues.append(msg)
     else:
-        msg = "No models cached yet – the embedding model needs to be downloaded"
+        msg = "Model cache unavailable because the storage directory is not writable"
         print(f"  {yellow('!')} {msg}")
         issues.append(msg)
 
@@ -256,7 +288,7 @@ def cmd_doctor() -> None:
     for pkg_name, import_name in [
         ("faiss-cpu", "faiss"),
         ("sentence-transformers", "sentence_transformers"),
-        ("fastmcp", "mcp.server.fastmcp"),
+        ("fastmcp", "fastmcp"),
         ("tree-sitter", "tree_sitter"),
     ]:
         try:
@@ -299,10 +331,12 @@ def cmd_doctor() -> None:
 
 def cmd_status() -> None:
     """Show index statistics and active project info."""
-    storage = get_storage_dir()
-    projects_dir = storage / "projects"
-
     print(bold("Index Status\n"))
+    storage = _get_storage_dir_or_report("status")
+    if storage is None:
+        return
+
+    projects_dir = storage / "projects"
 
     if not projects_dir.is_dir():
         print("  No projects indexed yet.")
@@ -359,18 +393,18 @@ def cmd_setup_guide() -> None:
     print(bold("1. Install"))
     if is_windows():
         print("   Open PowerShell and run:\n")
-        print(f"   {cyan('irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex')}\n")
+        print(f"   {cyan('irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex')}\n")
         print("   If execution policy blocks the script:\n")
-        print(f"   {cyan('powershell -ExecutionPolicy Bypass -c \"irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex\"')}\n")
+        print(f"   {cyan('powershell -ExecutionPolicy Bypass -c \"irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex\"')}\n")
     elif is_wsl():
         print("   From your WSL terminal:\n")
-        print(f"   {cyan('curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash')}\n")
+        print(f"   {cyan('curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash')}\n")
         print(f"   {yellow('Note:')} If Claude Desktop is installed on the Windows side,")
         print(f"   you may need to register the MCP server using the Windows path.")
         print(f"   The installer puts the project at: {install_dir}\n")
     else:
         print("   In your terminal:\n")
-        print(f"   {cyan('curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash')}\n")
+        print(f"   {cyan('curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash')}\n")
 
     # Step 2 – Register MCP
     print(bold("2. Register the MCP server"))

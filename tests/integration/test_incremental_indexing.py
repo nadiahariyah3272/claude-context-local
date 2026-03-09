@@ -274,6 +274,59 @@ class NewClass:
         assert result2.files_removed == 1
         assert result2.files_modified == 0
         assert result2.chunks_removed > 0
+
+    def test_indexing_config_change_triggers_full_reindex(self):
+        """Changing indexing config should rebuild the index and drop excluded file types."""
+        (self.test_path / 'settings.toml').write_text('''
+[server]
+port = 43594
+
+[database]
+url = "sqlite:///game.db"
+''')
+
+        indexer = Indexer(storage_dir=str(self.index_dir))
+        embedder = CodeEmbedder()
+        chunker = MultiLanguageChunker(str(self.test_path))
+
+        incremental_indexer = IncrementalIndexer(
+            indexer=indexer,
+            embedder=embedder,
+            chunker=chunker,
+            snapshot_manager=self.snapshot_manager
+        )
+
+        initial_result = incremental_indexer.incremental_index(
+            str(self.test_path),
+            'test_project'
+        )
+        assert initial_result.success
+        assert any(path.endswith('settings.toml') for path in indexer.get_stats()['file_chunk_counts'])
+
+        (self.test_path / '.claude-context-local.json').write_text(
+            '{"exclude_extensions": [".toml"]}',
+            encoding='utf-8'
+        )
+
+        refreshed_indexer = IncrementalIndexer(
+            indexer=indexer,
+            embedder=embedder,
+            chunker=MultiLanguageChunker(str(self.test_path)),
+            snapshot_manager=self.snapshot_manager
+        )
+
+        refreshed_result = refreshed_indexer.incremental_index(
+            str(self.test_path),
+            'test_project'
+        )
+
+        assert refreshed_result.success
+        assert all(
+            not path.endswith('settings.toml')
+            for path in indexer.get_stats()['file_chunk_counts']
+        )
+        metadata = self.snapshot_manager.load_metadata(str(self.test_path))
+        assert metadata['indexing_config']['exclude_extensions'] == ['.toml']
     
     def test_change_detection(self):
         """Test change detection using Merkle trees."""

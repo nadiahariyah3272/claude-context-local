@@ -38,6 +38,10 @@ class TestMultiLanguageChunker:
         assert chunker.is_supported("test.c++")
         assert chunker.is_supported("test.cs")
         assert chunker.is_supported("test.rs")
+        assert chunker.is_supported("test.yaml")
+        assert chunker.is_supported("test.yml")
+        assert chunker.is_supported("test.toml")
+        assert chunker.is_supported("test.json")
         assert not chunker.is_supported("test.txt")
     
     def test_chunk_python_file(self, chunker, test_data_dir):
@@ -237,3 +241,126 @@ class TestMultiLanguageChunker:
         assert "Overview" in chunk_names
         assert "Kotlin Support" in chunk_names
         assert "section" in chunk_types
+
+    def test_chunk_yaml_file(self, chunker, test_data_dir):
+        """Test chunking YAML config files."""
+        file_path = test_data_dir / "config.yaml"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        chunk_types = {chunk.chunk_type for chunk in chunks}
+        all_tags = {tag for chunk in chunks for tag in (chunk.tags or [])}
+
+        assert "services" in chunk_names
+        assert "database" in chunk_names
+        assert "config_section" in chunk_types
+        assert "yaml" in all_tags
+        assert "config" in all_tags
+
+    def test_chunk_toml_file(self, chunker, test_data_dir):
+        """Test chunking TOML config files."""
+        file_path = test_data_dir / "project.toml"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        all_tags = {tag for chunk in chunks for tag in (chunk.tags or [])}
+
+        assert "project" in chunk_names
+        assert "tool" in chunk_names
+        assert "tool.ruff" in chunk_names
+        assert "toml" in all_tags
+        assert "config" in all_tags
+
+    def test_chunk_json_file(self, chunker, test_data_dir):
+        """Test chunking JSON config files."""
+        file_path = test_data_dir / "package.json"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        all_tags = {tag for chunk in chunks for tag in (chunk.tags or [])}
+
+        assert "scripts" in chunk_names
+        assert "dependencies" in chunk_names
+        assert "json" in all_tags
+        assert "config" in all_tags
+
+    def test_invalid_yaml_falls_back_to_document_chunk(self, chunker, tmp_path):
+        """Invalid structured files should still index as a raw document chunk."""
+        file_path = tmp_path / "broken.yaml"
+        file_path.write_text("root:\n  - valid\n  invalid: [", encoding="utf-8")
+
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) == 1
+        assert chunks[0].chunk_type == "document"
+        assert "invalid: [" in chunks[0].content
+        assert "raw" in chunks[0].tags
+
+    def test_indexing_config_can_exclude_extensions(self, tmp_path):
+        """Project config should make it easy to exclude noisy file types."""
+        (tmp_path / ".claude-context-local.json").write_text(
+            '{"exclude_extensions": [".toml"]}',
+            encoding="utf-8",
+        )
+        (tmp_path / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+        (tmp_path / "settings.toml").write_text("[server]\nport = 43594\n", encoding="utf-8")
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+        chunks = chunker.chunk_directory(str(tmp_path))
+
+        assert chunker.is_supported("main.py")
+        assert not chunker.is_supported("settings.toml")
+        assert all(not chunk.file_path.endswith(".toml") for chunk in chunks)
+
+    def test_large_structured_files_can_be_skipped_by_config(self, tmp_path):
+        """Structured file limits should prevent huge config files from muddying the index."""
+        (tmp_path / ".claude-context-local.json").write_text(
+            '{"max_structured_file_lines": 3}',
+            encoding="utf-8",
+        )
+        (tmp_path / "large.toml").write_text(
+            "\n".join(
+                [
+                    "[server]",
+                    "port = 43594",
+                    "host = \"127.0.0.1\"",
+                    "[database]",
+                    "url = \"sqlite:///game.db\"",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+
+        assert chunker.chunk_file(str(tmp_path / "large.toml")) == []
+
+    def test_toml_with_datetime_values(self, tmp_path):
+        """TOML files containing datetime values should be indexed without crashing."""
+        file_path = tmp_path / "build.toml"
+        file_path.write_text(
+            "[build]\ndate = 2024-01-01\ntimestamp = 2024-01-01T12:00:00Z\n",
+            encoding="utf-8",
+        )
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        all_content = " ".join(c.content for c in chunks)
+        assert "2024-01-01" in all_content
+
+    def test_invalid_non_dict_config_file_is_ignored(self, tmp_path):
+        """A .claude-context-local.json that is not a JSON object should be skipped gracefully."""
+        (tmp_path / ".claude-context-local.json").write_text(
+            '["just", "a", "list"]', encoding="utf-8"
+        )
+        (tmp_path / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+
+        # Should not raise; indexing config should fall back to defaults
+        chunker = MultiLanguageChunker(str(tmp_path))
+        assert chunker.excluded_extensions == set()
+        assert chunker.is_supported("main.py")

@@ -51,7 +51,7 @@ python -m pytest tests/unit/test_chunking.py -v  # Single test file
 ### Indexing & Usage
 
 ```bash
-# Index a codebase (supports 18 file extensions)
+# Index a codebase (supports 22 file extensions)
 ./scripts/index_codebase.py /path/to/project
 
 # Index with custom storage location

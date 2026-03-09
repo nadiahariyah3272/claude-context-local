@@ -1,12 +1,15 @@
 """Multi-language chunker that combines AST and tree-sitter approaches."""
 
+import json
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional
 
 from chunking.code_chunk import CodeChunk
 from chunking.tree_sitter import TreeSitterChunker, TreeSitterChunk
 from chunking.languages import LANGUAGE_MAP
+from chunking.structured_data_chunker import StructuredDataChunker, STRUCTURED_DATA_EXTENSION_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +17,10 @@ logger = logging.getLogger(__name__)
 class MultiLanguageChunker:
     """Unified chunker supporting multiple programming languages."""
     # Supported extensions - derived from LANGUAGE_MAP
-    SUPPORTED_EXTENSIONS = set(LANGUAGE_MAP.keys())
+    SUPPORTED_EXTENSIONS = set(LANGUAGE_MAP.keys()) | set(STRUCTURED_DATA_EXTENSION_MAP.keys())
+    CONFIG_FILE_NAME = '.claude-context-local.json'
+    DEFAULT_MAX_STRUCTURED_FILE_LINES = 50_000
+    DEFAULT_MAX_STRUCTURED_FILE_BYTES = 5_000_000
     
     # Common large/build/tooling directories to skip during traversal
     DEFAULT_IGNORED_DIRS = {
@@ -37,9 +43,103 @@ class MultiLanguageChunker:
             root_path: Optional root path for relative path calculation
         """
         self.root_path = root_path
+        self.indexing_config = self._load_indexing_config()
+        self.excluded_extensions = set(self.indexing_config['exclude_extensions'])
+        self.supported_extensions = self.SUPPORTED_EXTENSIONS - self.excluded_extensions
         # Use AST chunker for Python (more mature implementation)
-        # Use tree-sitter for other languages
+        # Use tree-sitter for programming languages and a structured parser for config files
         self.tree_sitter_chunker = TreeSitterChunker()
+        self.structured_data_chunker = StructuredDataChunker(
+            root_path=root_path,
+            max_file_lines=self.indexing_config['max_structured_file_lines'],
+            max_file_bytes=self.indexing_config['max_structured_file_bytes'],
+        )
+
+    def _load_indexing_config(self) -> dict:
+        """Load per-project and environment indexing controls."""
+        config = {}
+
+        if self.root_path:
+            config_path = Path(self.root_path) / self.CONFIG_FILE_NAME
+            if config_path.is_file():
+                try:
+                    loaded = json.loads(config_path.read_text(encoding='utf-8'))
+                    if isinstance(loaded, dict):
+                        config = loaded
+                    else:
+                        logger.warning(
+                            "Ignoring %s: expected a JSON object but got %s",
+                            config_path,
+                            type(loaded).__name__,
+                        )
+                except (OSError, json.JSONDecodeError) as exc:
+                    logger.warning(f"Failed to load indexing config from {config_path}: {exc}")
+
+        excluded_extensions = set()
+        for extension in config.get('exclude_extensions', []):
+            normalized = self._normalize_extension(extension)
+            if normalized:
+                excluded_extensions.add(normalized)
+
+        env_excluded = os.getenv('CODE_SEARCH_EXCLUDE_EXTENSIONS', '')
+        if env_excluded:
+            for extension in env_excluded.split(','):
+                normalized = self._normalize_extension(extension)
+                if normalized:
+                    excluded_extensions.add(normalized)
+
+        return {
+            'exclude_extensions': sorted(excluded_extensions),
+            'max_structured_file_lines': self._read_positive_int(
+                os.getenv('CODE_SEARCH_MAX_STRUCTURED_FILE_LINES'),
+                config.get('max_structured_file_lines'),
+                self.DEFAULT_MAX_STRUCTURED_FILE_LINES,
+            ),
+            'max_structured_file_bytes': self._read_positive_int(
+                os.getenv('CODE_SEARCH_MAX_STRUCTURED_FILE_BYTES'),
+                config.get('max_structured_file_bytes'),
+                self.DEFAULT_MAX_STRUCTURED_FILE_BYTES,
+            ),
+        }
+
+    def _normalize_extension(self, extension: str) -> Optional[str]:
+        """Normalize configured file extensions."""
+        if not extension:
+            return None
+
+        normalized = extension.strip().lower()
+        if not normalized:
+            return None
+        if not normalized.startswith('.'):
+            normalized = f'.{normalized}'
+        return normalized
+
+    def _read_positive_int(
+        self,
+        env_value: Optional[str],
+        config_value: Optional[int | str],
+        default: Optional[int],
+    ) -> Optional[int]:
+        """Read a positive integer from env/config; zero or blank disables the limit."""
+        value = env_value if env_value not in (None, '') else config_value
+        if value in (None, ''):
+            return default
+
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            logger.warning(f"Invalid indexing limit {value!r}; using default {default}")
+            return default
+
+        return parsed if parsed > 0 else None
+
+    def _is_internal_config_file(self, file_path: str) -> bool:
+        """Avoid indexing the local indexing configuration itself."""
+        return Path(file_path).name == self.CONFIG_FILE_NAME
+
+    def get_indexing_config_signature(self) -> dict:
+        """Return the active indexing configuration for cache invalidation."""
+        return dict(self.indexing_config)
     
     def is_supported(self, file_path: str) -> bool:
         """Check if file type is supported.
@@ -50,8 +150,11 @@ class MultiLanguageChunker:
         Returns:
             True if file type is supported
         """
+        if self._is_internal_config_file(file_path):
+            return False
+
         suffix = Path(file_path).suffix.lower()
-        return suffix in self.SUPPORTED_EXTENSIONS
+        return suffix in self.supported_extensions
     
     def chunk_file(self, file_path: str) -> List[CodeChunk]:
         """Chunk a file into semantic units.
@@ -66,8 +169,11 @@ class MultiLanguageChunker:
             logger.debug(f"File type not supported: {file_path}")
             return []
 
-        # Use tree-sitter for all languages
+        # Use tree-sitter for programming languages and the structured parser for config files
         try:
+            if Path(file_path).suffix.lower() in STRUCTURED_DATA_EXTENSION_MAP:
+                return self.structured_data_chunker.chunk_file(file_path)
+
             tree_chunks = self.tree_sitter_chunker.chunk_file(file_path)
             # Convert TreeSitterChunk to CodeChunk
             return self._convert_tree_chunks(tree_chunks, file_path)
@@ -228,9 +334,13 @@ class MultiLanguageChunker:
         
         # Use provided extensions or all supported
         if extensions:
-            valid_extensions = set(extensions) & self.SUPPORTED_EXTENSIONS
+            valid_extensions = {
+                normalized
+                for ext in extensions
+                if (normalized := self._normalize_extension(ext)) is not None
+            } & self.supported_extensions
         else:
-            valid_extensions = self.SUPPORTED_EXTENSIONS
+            valid_extensions = self.supported_extensions
         
         # Find all files with supported extensions
         for ext in valid_extensions:
