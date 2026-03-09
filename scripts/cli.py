@@ -292,7 +292,8 @@ def cmd_doctor() -> None:
     for pkg_name, import_names in [
         ("faiss-cpu", ("faiss",)),
         ("sentence-transformers", ("sentence_transformers",)),
-        ("fastmcp", ("fastmcp", "mcp.server.fastmcp")),
+        ("fastmcp", ("fastmcp",)),
+        ("mcp", ("mcp", "mcp.server.fastmcp")),
         ("tree-sitter", ("tree_sitter",)),
     ]:
         try:

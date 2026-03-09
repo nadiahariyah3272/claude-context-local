@@ -105,6 +105,12 @@ For platform-specific variations, run `python scripts/cli.py setup-guide`.
 
 ### Install (one‑liner)
 
+> **Before running any installer:** You can review the scripts at
+> [install.sh](https://github.com/tlines2016/claude-context-local/blob/main/scripts/install.sh)
+> and [install.ps1](https://github.com/tlines2016/claude-context-local/blob/main/scripts/install.ps1)
+> on GitHub before executing them. This is best practice when piping scripts from the internet
+> directly into a shell.
+
 #### macOS / Linux / Git Bash
 
 ```bash

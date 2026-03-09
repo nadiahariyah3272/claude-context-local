@@ -64,8 +64,11 @@ class StructuredDataChunker:
 
         try:
             source_text = path.read_text(encoding='utf-8')
-        except (OSError, UnicodeDecodeError) as exc:
-            logger.warning(f"Failed to read structured data file {file_path}: {exc}")
+        except UnicodeDecodeError as exc:
+            logger.warning("Skipping non-UTF-8 structured data file %s: %s", file_path, exc)
+            return []
+        except OSError as exc:
+            logger.error("Failed to read structured data file %s: %s", file_path, exc)
             return []
 
         if not source_text.strip():
@@ -336,8 +339,10 @@ class StructuredDataChunker:
                     line_index.setdefault(key, line_number)
             elif language == 'toml':
                 if stripped.startswith('[') and stripped.endswith(']'):
-                    table_name = stripped.strip('[]')
-                    for token in filter(None, table_name.split('.')):
+                    # strip('[]') removes all leading/trailing bracket chars (covers [[…]])
+                    # then .strip() removes any padding spaces inside the brackets.
+                    table_name = stripped.strip('[]').strip()
+                    for token in filter(None, (t.strip() for t in table_name.split('.'))):
                         line_index.setdefault(token, line_number)
                     if table_name:
                         line_index.setdefault(table_name, line_number)

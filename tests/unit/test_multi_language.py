@@ -377,8 +377,13 @@ class TestMultiLanguageChunker:
 
         assert chunker.chunk_file(str(tmp_path / "large.toml")) == []
 
-    def test_non_utf8_indexing_config_falls_back_to_defaults(self, tmp_path):
+    def test_non_utf8_indexing_config_falls_back_to_defaults(self, monkeypatch, tmp_path):
         """A non-UTF-8 indexing config should not crash chunker initialization."""
+        # Isolate from any CODE_SEARCH_* env vars that might be set in the test runner
+        monkeypatch.delenv("CODE_SEARCH_EXCLUDE_EXTENSIONS", raising=False)
+        monkeypatch.delenv("CODE_SEARCH_MAX_STRUCTURED_FILE_LINES", raising=False)
+        monkeypatch.delenv("CODE_SEARCH_MAX_STRUCTURED_FILE_BYTES", raising=False)
+
         (tmp_path / ".claude-context-local.json").write_bytes(b"\xff\xfe\x00\x00")
 
         chunker = MultiLanguageChunker(str(tmp_path))
