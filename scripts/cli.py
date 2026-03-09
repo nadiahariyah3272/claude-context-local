@@ -255,7 +255,7 @@ def cmd_doctor() -> None:
 
     # 5. Install config
     if storage:
-        config = load_local_install_config(storage)
+        config = load_local_install_config(storage_dir=storage)
         if config:
             model = config.get("embedding_model", {})
             model_name = model.get("model_name", "unknown") if isinstance(model, dict) else (model or "unknown")

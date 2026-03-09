@@ -283,7 +283,7 @@ class StructuredDataChunker:
     def _render_fragment(self, language: str, name: str, value: Any) -> str:
         """Render a chunk in a search-friendly, normalized text form."""
         if language == 'yaml':
-            rendered_value = yaml.safe_dump(value, sort_keys=False, allow_unicode=True).strip()
+            rendered_value = yaml.safe_dump(value, sort_keys=True, allow_unicode=True).strip()
         else:
             rendered_value = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True)
 
