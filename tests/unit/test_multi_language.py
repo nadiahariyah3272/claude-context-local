@@ -338,6 +338,46 @@ class TestMultiLanguageChunker:
 
         assert chunker.chunk_file(str(tmp_path / "large.toml")) == []
 
+    def test_non_utf8_indexing_config_falls_back_to_defaults(self, tmp_path):
+        """A non-UTF-8 indexing config should not crash chunker initialization."""
+        (tmp_path / ".claude-context-local.json").write_bytes(b"\xff\xfe\x00\x00")
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+
+        assert chunker.excluded_extensions == set()
+        assert (
+            chunker.indexing_config["max_structured_file_lines"]
+            == MultiLanguageChunker.DEFAULT_MAX_STRUCTURED_FILE_LINES
+        )
+
+    def test_non_utf8_structured_file_is_skipped(self, tmp_path):
+        """Structured files that cannot be decoded as UTF-8 should be skipped safely."""
+        file_path = tmp_path / "broken.yaml"
+        file_path.write_bytes(b"\xff\xfe\x00\x00")
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+
+        assert chunker.chunk_file(str(file_path)) == []
+
+    def test_structured_chunks_keep_line_numbers(self, tmp_path):
+        """Structured chunk line estimates should remain stable after line indexing."""
+        file_path = tmp_path / "config.yaml"
+        file_path.write_text(
+            "database:\n"
+            "  host: localhost\n"
+            "services:\n"
+            "  api:\n"
+            "    port: 8080\n",
+            encoding="utf-8",
+        )
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+        chunks = {chunk.name: chunk for chunk in chunker.chunk_file(str(file_path))}
+
+        assert chunks["database"].start_line == 1
+        assert chunks["services"].start_line == 3
+        assert chunks["services.api"].start_line == 4
+
     def test_toml_with_datetime_values(self, tmp_path):
         """TOML files containing datetime values should be indexed without crashing."""
         file_path = tmp_path / "build.toml"

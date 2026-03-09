@@ -6,6 +6,7 @@ semantic code search system.
 """
 
 import json
+import importlib
 import os
 import platform
 import shutil
@@ -17,6 +18,9 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from common_utils import VERSION, get_storage_dir, load_local_install_config
+
+INSTALL_SH_URL = "https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.sh"
+INSTALL_PS1_URL = "https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.ps1"
 
 # ── Colour helpers (degrade gracefully when stdout is not a terminal) ──
 
@@ -285,17 +289,21 @@ def cmd_doctor() -> None:
         issues.append(msg)
 
     # 7. Key Python packages
-    for pkg_name, import_name in [
-        ("faiss-cpu", "faiss"),
-        ("sentence-transformers", "sentence_transformers"),
-        ("fastmcp", "fastmcp"),
-        ("tree-sitter", "tree_sitter"),
+    for pkg_name, import_names in [
+        ("faiss-cpu", ("faiss",)),
+        ("sentence-transformers", ("sentence_transformers",)),
+        ("fastmcp", ("fastmcp", "mcp.server.fastmcp")),
+        ("tree-sitter", ("tree_sitter",)),
     ]:
         try:
-            __import__(import_name)
-            print(f"  {green('✓')} {pkg_name} importable")
+            for import_name in import_names:
+                importlib.import_module(import_name)
+            print(f"  {green('✓')} {pkg_name} importable ({', '.join(import_names)})")
         except Exception as exc:
-            msg = f"{pkg_name} not importable ({type(exc).__name__}) – run 'uv sync' to install dependencies"
+            msg = (
+                f"{pkg_name} not importable via {', '.join(import_names)} "
+                f"({type(exc).__name__}) – run 'uv sync' to install dependencies"
+            )
             print(f"  {red('✗')} {msg}")
             issues.append(msg)
 
@@ -393,18 +401,18 @@ def cmd_setup_guide() -> None:
     print(bold("1. Install"))
     if is_windows():
         print("   Open PowerShell and run:\n")
-        print(f"   {cyan('irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex')}\n")
+        print(f"   {cyan(f'irm {INSTALL_PS1_URL} | iex')}\n")
         print("   If execution policy blocks the script:\n")
-        print(f"   {cyan('powershell -ExecutionPolicy Bypass -c \"irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex\"')}\n")
+        print(f"   {cyan(f'powershell -ExecutionPolicy Bypass -c \"irm {INSTALL_PS1_URL} | iex\"')}\n")
     elif is_wsl():
         print("   From your WSL terminal:\n")
-        print(f"   {cyan('curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash')}\n")
+        print(f"   {cyan(f'curl -fsSL {INSTALL_SH_URL} | bash')}\n")
         print(f"   {yellow('Note:')} If Claude Desktop is installed on the Windows side,")
         print(f"   you may need to register the MCP server using the Windows path.")
         print(f"   The installer puts the project at: {install_dir}\n")
     else:
         print("   In your terminal:\n")
-        print(f"   {cyan('curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash')}\n")
+        print(f"   {cyan(f'curl -fsSL {INSTALL_SH_URL} | bash')}\n")
 
     # Step 2 – Register MCP
     print(bold("2. Register the MCP server"))

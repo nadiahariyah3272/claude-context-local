@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import tomllib
 from pathlib import Path
 from typing import Any, List, Optional
@@ -63,15 +64,17 @@ class StructuredDataChunker:
 
         try:
             source_text = path.read_text(encoding='utf-8')
-        except OSError as exc:
-            logger.error(f"Failed to read structured data file {file_path}: {exc}")
+        except (OSError, UnicodeDecodeError) as exc:
+            logger.warning(f"Failed to read structured data file {file_path}: {exc}")
             return []
 
         if not source_text.strip():
             return []
 
+        source_lines = source_text.splitlines()
+        line_count = len(source_lines)
+
         if self.max_file_lines is not None:
-            line_count = len(source_text.splitlines())
             if line_count > self.max_file_lines:
                 logger.info(
                     "Skipping structured data file %s (%s lines exceeds limit %s lines)",
@@ -97,17 +100,28 @@ class StructuredDataChunker:
                     chunk_type='document',
                     content=source_text,
                     start_line=1,
-                    end_line=max(1, len(source_text.splitlines())),
+                    end_line=max(1, line_count),
                     tags=[language, 'config', 'raw'],
                 )
             ]
 
         chunks: List[CodeChunk] = []
         multiple_documents = len(documents) > 1
+        line_index = self._build_line_index(source_lines, language)
 
         for index, document in enumerate(documents, start=1):
             path_tokens = [f'document_{index}'] if multiple_documents else []
-            chunks.extend(self._collect_chunks(file_path, source_text, document, language, path_tokens, is_root=True))
+            chunks.extend(
+                self._collect_chunks(
+                    file_path=file_path,
+                    value=document,
+                    language=language,
+                    path_tokens=path_tokens,
+                    is_root=True,
+                    line_index=line_index,
+                    line_count=line_count,
+                )
+            )
 
         if chunks:
             return chunks
@@ -121,7 +135,7 @@ class StructuredDataChunker:
                 chunk_type='document',
                 content=rendered,
                 start_line=1,
-                end_line=max(1, len(source_text.splitlines())),
+                end_line=max(1, line_count),
                 tags=[language, 'config', 'document'],
             )
         ]
@@ -142,11 +156,12 @@ class StructuredDataChunker:
     def _collect_chunks(
         self,
         file_path: str,
-        source_text: str,
         value: Any,
         language: str,
         path_tokens: List[str],
         is_root: bool,
+        line_index: dict[str, int],
+        line_count: int,
     ) -> List[CodeChunk]:
         """Collect semantic chunks for composite values and top-level entries."""
         chunks: List[CodeChunk] = []
@@ -160,9 +175,9 @@ class StructuredDataChunker:
                 if is_root or is_composite:
                     name = self._format_path(child_tokens)
                     rendered = self._render_fragment(language, name, child)
-                    start_line = self._estimate_start_line(source_text, key_text, language)
+                    start_line = self._estimate_start_line(line_index, key_text)
                     end_line = min(
-                        max(1, len(source_text.splitlines())),
+                        max(1, line_count),
                         start_line + max(0, rendered.count('\n')),
                     )
                     tags = [language, 'config', 'mapping' if is_composite else 'entry']
@@ -184,11 +199,12 @@ class StructuredDataChunker:
                     chunks.extend(
                         self._collect_chunks(
                             file_path=file_path,
-                            source_text=source_text,
                             value=child,
                             language=language,
                             path_tokens=child_tokens,
                             is_root=False,
+                            line_index=line_index,
+                            line_count=line_count,
                         )
                     )
 
@@ -201,9 +217,9 @@ class StructuredDataChunker:
                     name = self._format_path(child_tokens)
                     rendered = self._render_fragment(language, name, child)
                     search_token = self._find_search_token(path_tokens, index)
-                    start_line = self._estimate_start_line(source_text, search_token, language)
+                    start_line = self._estimate_start_line(line_index, search_token)
                     end_line = min(
-                        max(1, len(source_text.splitlines())),
+                        max(1, line_count),
                         start_line + max(0, rendered.count('\n')),
                     )
                     tags = [language, 'config', 'list']
@@ -225,11 +241,12 @@ class StructuredDataChunker:
                     chunks.extend(
                         self._collect_chunks(
                             file_path=file_path,
-                            source_text=source_text,
                             value=child,
                             language=language,
                             path_tokens=child_tokens,
                             is_root=False,
+                            line_index=line_index,
+                            line_count=line_count,
                         )
                     )
 
@@ -294,20 +311,48 @@ class StructuredDataChunker:
                 return token
         return str(index)
 
-    def _estimate_start_line(self, source_text: str, token: str, language: str) -> int:
+    def _build_line_index(self, source_lines: List[str], language: str) -> dict[str, int]:
+        """Build a best-effort first-occurrence index for config keys and sections."""
+        line_index: dict[str, int] = {}
+
+        for line_number, line in enumerate(source_lines, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            if language == 'yaml':
+                if stripped.startswith('#'):
+                    continue
+                if ':' not in stripped:
+                    continue
+                key = stripped.split(':', 1)[0].strip()
+                if key.startswith('-'):
+                    key = key[1:].strip()
+                key = key.strip('\'"')
+                if key:
+                    line_index.setdefault(key, line_number)
+            elif language == 'json':
+                for key in re.findall(r'"([^"\\]+)"\s*:', line):
+                    line_index.setdefault(key, line_number)
+            elif language == 'toml':
+                if stripped.startswith('[') and stripped.endswith(']'):
+                    table_name = stripped.strip('[]')
+                    for token in filter(None, table_name.split('.')):
+                        line_index.setdefault(token, line_number)
+                    if table_name:
+                        line_index.setdefault(table_name, line_number)
+                elif '=' in stripped:
+                    key = stripped.split('=', 1)[0].strip().strip('\'"')
+                    if key:
+                        line_index.setdefault(key, line_number)
+
+        return line_index
+
+    def _estimate_start_line(self, line_index: dict[str, int], token: str) -> int:
         """Best-effort estimate of the line where a key or section begins."""
         if not token:
             return 1
-
-        for line_number, line in enumerate(source_text.splitlines(), start=1):
-            stripped = line.strip()
-            if language == 'yaml' and (stripped.startswith(f'{token}:') or f' {token}:' in line):
-                return line_number
-            if language == 'json' and f'"{token}"' in line:
-                return line_number
-            if language == 'toml' and (f'{token} =' in stripped or (stripped.startswith('[') and token in stripped)):
-                return line_number
-        return 1
+        return line_index.get(token, 1)
 
     def _render_fragment(self, language: str, name: str, value: Any) -> str:
         """Render a chunk in a search-friendly, normalized text form."""

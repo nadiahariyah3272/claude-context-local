@@ -72,7 +72,7 @@ class MultiLanguageChunker:
                             config_path,
                             type(loaded).__name__,
                         )
-                except (OSError, json.JSONDecodeError) as exc:
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                     logger.warning(f"Failed to load indexing config from {config_path}: {exc}")
 
         excluded_extensions = set()
