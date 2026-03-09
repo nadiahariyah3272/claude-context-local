@@ -110,7 +110,8 @@ else {
     Write-Host "Skipping dependency update (keeping current version)"
 }
 
-if (-not $env:SKIP_GPU) {
+$skipGpu = $env:SKIP_GPU -eq "1"
+if (-not $skipGpu) {
     Write-Host "Checking for NVIDIA GPU to install FAISS GPU wheels (optional)"
     if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
         Write-Host "NVIDIA GPU detected. Attempting to install faiss-gpu wheels..."
