@@ -236,7 +236,7 @@ def cmd_doctor() -> None:
     config = load_local_install_config()
     if config:
         model = config.get("embedding_model", {})
-        model_name = model.get("model_name", model) if isinstance(model, dict) else model
+        model_name = model.get("model_name", "unknown") if isinstance(model, dict) else (model or "unknown")
         print(f"  {green('✓')} Install config found (model: {model_name})")
     else:
         msg = "No install_config.json found – run the installer first"

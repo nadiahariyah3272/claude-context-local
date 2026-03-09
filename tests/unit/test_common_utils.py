@@ -35,7 +35,7 @@ class TestCommonUtilsAdditions:
         result = normalize_path("/tmp//foo///bar")
         assert "//" not in result
 
-    def test_normalize_path_expands_tilde(self, tmp_path):
+    def test_normalize_path_expands_tilde(self):
         """normalize_path should expand ~ to the home directory."""
         result = normalize_path("~/somefile")
         assert "~" not in result

@@ -78,13 +78,11 @@ def main():
     # Validate directory
     directory_path = Path(args.directory).resolve()
     if not directory_path.exists():
-        logger.error(f"Directory does not exist: {directory_path}")
-        logger.error("Please check the path and ensure it is accessible.")
+        logger.error(f"Directory does not exist: {directory_path} – check the path and ensure it is accessible.")
         sys.exit(1)
     
     if not directory_path.is_dir():
-        logger.error(f"Path is not a directory: {directory_path}")
-        logger.error("Please provide a path to a directory, not a file.")
+        logger.error(f"Path is not a directory: {directory_path} – provide a path to a directory, not a file.")
         sys.exit(1)
     
     # Setup storage (use os.path.expanduser for cross-platform ~ expansion)

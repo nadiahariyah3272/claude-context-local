@@ -1,11 +1,14 @@
 """Common utilities shared across modules."""
 
 import json
+import logging
 import os
 import platform
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from functools import lru_cache
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 VERSION = "0.1.0"
 
@@ -69,14 +72,12 @@ def load_local_install_config(storage_dir: Optional[Path] = None) -> Dict[str, A
     try:
         return json.loads(config_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        import logging
-        logging.getLogger(__name__).warning(
+        logger.warning(
             "Corrupt install config at %s: %s – using defaults", config_path, exc
         )
         return {}
     except OSError as exc:
-        import logging
-        logging.getLogger(__name__).warning(
+        logger.warning(
             "Cannot read install config at %s: %s – using defaults", config_path, exc
         )
         return {}
