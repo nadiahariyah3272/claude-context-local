@@ -130,7 +130,11 @@ class TestMultiLanguageChunker:
         assert "MathOperations" in chunk_names
         assert "Operation" in chunk_names
         assert "version" in chunk_names
-        assert any(t in chunk_types for t in ["class", "interface", "enum", "property", "function", "constructor"])
+        assert "class" in chunk_types
+        assert "interface" in chunk_types
+        assert "enum" in chunk_types
+        assert "property" in chunk_types
+        assert "constructor" in chunk_types
     
     def test_chunk_go_file(self, chunker, test_data_dir):
         """Test chunking Go file."""

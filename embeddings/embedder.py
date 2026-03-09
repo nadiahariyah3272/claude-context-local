@@ -43,6 +43,10 @@ def _resolve_model_config(model_name: Optional[str]) -> EmbeddingModelConfig:
             field.name: configured_model[field.name]
             for field in fields(EmbeddingModelConfig)
             if field.name != "model_name" and field.name in configured_model
+            and (
+                configured_model[field.name] is None
+                or isinstance(configured_model[field.name], str)
+            )
         }
         return replace(config, **overrides)
 

@@ -343,7 +343,7 @@ This repo now reads that local install config automatically when `CODE_SEARCH_MO
 
 #### A note on Qwen3.5 GGUFs
 
-`unsloth/Qwen3.5-35B-A3B-GGUF` is **not** a good drop-in embedding model for this project. It is a generative GGUF for `llama.cpp` / chat-style inference, while this repository's indexing pipeline expects a SentenceTransformer-compatible embedding model that returns dense retrieval vectors. It may be a good local coding assistant model, but it should not replace the embedding backend here without building a separate embedding integration.
+`unsloth/Qwen3.5-35B-A3B-GGUF` is **not** a good drop-in embedding model for this project. GGUF is a quantized model format mainly used by local inference engines such as `llama.cpp`, and this specific checkpoint is a generative chat/coding model rather than a SentenceTransformer-compatible embedding model. This repository's indexing pipeline expects dense retrieval vectors from an embedding model, so Qwen3.5 GGUFs are better treated as local coding assistants than as the embedding backend here.
 
 If you want to evaluate Unsloth-hosted embedding candidates instead, start with their embedding collection rather than the Qwen3.5 GGUF chat models:
 
