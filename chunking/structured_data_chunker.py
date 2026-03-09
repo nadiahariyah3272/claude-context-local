@@ -348,10 +348,23 @@ class StructuredDataChunker:
 
         return line_index
 
-    def _estimate_start_line(self, line_index: dict[str, int], token: str) -> int:
+    def _estimate_start_line(
+        self,
+        line_index_or_source: str | dict[str, int],
+        token: str,
+        language: Optional[str] = None,
+    ) -> int:
         """Best-effort estimate of the line where a key or section begins."""
         if not token:
             return 1
+
+        if isinstance(line_index_or_source, dict):
+            return line_index_or_source.get(token, 1)
+
+        if language is None:
+            return 1
+
+        line_index = self._build_line_index(line_index_or_source.splitlines(), language)
         return line_index.get(token, 1)
 
     def _render_fragment(self, language: str, name: str, value: Any) -> str:

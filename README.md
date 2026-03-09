@@ -26,7 +26,7 @@
 
 Claude Context without the cloud. Semantic code search that runs 100% locally using local embedding models on your own machine. No API keys, no costs, your code never leaves your machine.
 
-Project home: [tlines2016/claude-context-local](https://github.com/tlines2016/claude-context-local)
+This fork tracks the upstream project at [tlines2016/claude-context-local](https://github.com/tlines2016/claude-context-local).
 
 - 🔍 **Find code by meaning, not strings**
 - 🔒 **100% local - completely private**
