@@ -28,7 +28,7 @@ def test_configure_huggingface_auth_reads_windows_profile_token(monkeypatch, tmp
     monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
 
     git_bash_home = tmp_path / "home" / "gitbash-user"
-    windows_home = tmp_path / "Users" / "tline"
+    windows_home = tmp_path / "Users" / "windowsuser"
     git_bash_home.mkdir(parents=True)
     windows_token = windows_home / ".cache" / "huggingface" / "token"
     windows_token.parent.mkdir(parents=True)

@@ -116,16 +116,16 @@ if (-not $env:SKIP_GPU) {
         Write-Host "NVIDIA GPU detected. Attempting to install faiss-gpu wheels..."
         Push-Location $ProjectDir
         try {
-            uv add faiss-gpu-cu12 *> $null
+            uv add faiss-gpu-cu12 | Out-Null
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "Installed faiss-gpu-cu12"
-                uv remove faiss-cpu *> $null
+                uv remove faiss-cpu | Out-Null
             }
             else {
-                uv add faiss-gpu-cu11 *> $null
+                uv add faiss-gpu-cu11 | Out-Null
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host "Installed faiss-gpu-cu11"
-                    uv remove faiss-cpu *> $null
+                    uv remove faiss-cpu | Out-Null
                 }
                 else {
                     Write-Host "Could not install faiss-gpu wheels. Keeping faiss-cpu."

@@ -10,6 +10,13 @@ HF_TOKEN_ENV_VARS = (
     "HF_TOKEN",
     "HUGGING_FACE_HUB_TOKEN",
 )
+AUTH_ERROR_INDICATORS = (
+    "401",
+    "unauthorized",
+    "gated repo",
+    "restricted",
+    "access to model",
+)
 
 
 def _unique_paths(paths: Iterable[Path]) -> list[Path]:
@@ -114,7 +121,7 @@ def build_huggingface_auth_error(model_name: str, exc: Exception) -> str:
     error_text = str(exc)
     lower_error = error_text.lower()
 
-    if not any(term in lower_error for term in ("401", "unauthorized", "gated repo", "restricted", "access to model")):
+    if not any(term in lower_error for term in AUTH_ERROR_INDICATORS):
         return error_text
 
     return (

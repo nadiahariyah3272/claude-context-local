@@ -262,6 +262,7 @@ accepting terms and/or authentication to download.
       ```bash
       hf auth login
       hf auth whoami
+      # Older CLI builds may still use: huggingface-cli login
       # Paste your token from https://huggingface.co/settings/tokens
       ```
 
