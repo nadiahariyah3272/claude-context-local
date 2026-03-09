@@ -43,7 +43,13 @@ def save_local_install_config(
     target_storage_dir.mkdir(parents=True, exist_ok=True)
 
     config = load_local_install_config(target_storage_dir)
-    embedding_config: Dict[str, Any] = {"model_name": model_name}
+    existing_embedding_config = config.get("embedding_model")
+    if isinstance(existing_embedding_config, dict):
+        embedding_config: Dict[str, Any] = dict(existing_embedding_config)
+    else:
+        embedding_config = {}
+
+    embedding_config["model_name"] = model_name
     if overrides:
         for key, value in overrides.items():
             if isinstance(value, str):

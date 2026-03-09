@@ -7,7 +7,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/FarhanAliRaza/claude-context-local"
 PROJECT_DIR="${HOME}/.local/share/claude-context-local"
-STORAGE_DIR="${HOME}/.claude_code_search"
+STORAGE_DIR="${CODE_SEARCH_STORAGE:-${HOME}/.claude_code_search}"
 MODEL_NAME="${CODE_SEARCH_MODEL:-google/embeddinggemma-300m}"
 
 print() { printf "%b\n" "$1"; }

@@ -130,9 +130,11 @@ class TestMultiLanguageChunker:
         assert "MathOperations" in chunk_names
         assert "Operation" in chunk_names
         assert "version" in chunk_names
+        assert "create" in chunk_names
         assert "class" in chunk_types
         assert "interface" in chunk_types
         assert "enum" in chunk_types
+        assert "object" in chunk_types
         assert "property" in chunk_types
         assert "constructor" in chunk_types
     

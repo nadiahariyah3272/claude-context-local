@@ -17,6 +17,7 @@ class KotlinChunker(LanguageChunker):
             'class_declaration',
             'function_declaration',
             'secondary_constructor',
+            'companion_object',
             'object_declaration',
             'property_declaration',
         }
@@ -55,6 +56,8 @@ class KotlinChunker(LanguageChunker):
             else:
                 metadata['declaration_kind'] = 'class'
         elif node.type == 'object_declaration':
+            metadata['declaration_kind'] = 'object'
+        elif node.type == 'companion_object':
             metadata['declaration_kind'] = 'object'
         elif node.type == 'property_declaration':
             metadata['declaration_kind'] = 'property'

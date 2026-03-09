@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from chunking.code_chunk import CodeChunk
-from common_utils import get_storage_dir, save_local_install_config
+from common_utils import get_storage_dir, load_local_install_config, save_local_install_config
 from embeddings.embedder import CodeEmbedder
 from embeddings.huggingface_auth import (
     build_huggingface_auth_error,
@@ -245,3 +245,24 @@ def test_code_embedder_uses_local_prefix_overrides_for_generic_models(monkeypatc
     assert "prompt_name" not in calls[1][1]
     embedder.cleanup()
     get_storage_dir.cache_clear()
+
+
+def test_save_local_install_config_preserves_existing_embedding_settings(tmp_path):
+    save_local_install_config(
+        "intfloat/e5-base-v2",
+        storage_dir=tmp_path,
+        overrides={
+            "query_prefix": "query: ",
+            "document_prefix": "passage: ",
+        },
+    )
+
+    save_local_install_config(
+        "Salesforce/SFR-Embedding-Code-400M_R",
+        storage_dir=tmp_path,
+    )
+
+    config = load_local_install_config(tmp_path)
+    assert config["embedding_model"]["model_name"] == "Salesforce/SFR-Embedding-Code-400M_R"
+    assert config["embedding_model"]["query_prefix"] == "query: "
+    assert config["embedding_model"]["document_prefix"] == "passage: "
