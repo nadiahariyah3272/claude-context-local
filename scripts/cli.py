@@ -15,9 +15,7 @@ from pathlib import Path
 # Add the parent directory to the path so we can import our modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from common_utils import get_storage_dir, load_local_install_config
-
-VERSION = "0.1.0"
+from common_utils import VERSION, get_storage_dir, load_local_install_config
 
 # ── Colour helpers (degrade gracefully when stdout is not a terminal) ──
 
