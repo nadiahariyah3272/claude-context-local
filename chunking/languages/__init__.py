@@ -10,6 +10,7 @@ from chunking.languages.svelte_chunker import SvelteChunker
 from chunking.languages.go_chunker import GoChunker
 from chunking.languages.rust_chunker import RustChunker
 from chunking.languages.java_chunker import JavaChunker
+from chunking.languages.kotlin_chunker import KotlinChunker
 from chunking.languages.markdown_chunker import MarkdownChunker
 from chunking.languages.c_chunker import CChunker
 from chunking.languages.cpp_chunker import CppChunker
@@ -32,6 +33,8 @@ LANGUAGE_MAP = {
     '.go': ('go', GoChunker),
     '.rs': ('rust', RustChunker),
     '.java': ('java', JavaChunker),
+    '.kt': ('kotlin', KotlinChunker),
+    '.kts': ('kotlin', KotlinChunker),
     '.md': ('markdown', MarkdownChunker),
     '.c': ('c', CChunker),
     '.cpp': ('cpp', _get_cpp_chunker),

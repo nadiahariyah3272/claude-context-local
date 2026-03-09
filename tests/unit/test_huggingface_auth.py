@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 import pytest
 
+from chunking.code_chunk import CodeChunk
+from common_utils import get_storage_dir, load_local_install_config, save_local_install_config
 from embeddings.embedder import CodeEmbedder
 from embeddings.huggingface_auth import (
     build_huggingface_auth_error,
@@ -89,28 +92,177 @@ def test_code_embedder_accepts_other_embeddinggemma_variants(monkeypatch, tmp_pa
     embedder.cleanup()
 
 
-def test_code_embedder_rejects_unknown_non_gemma_models(tmp_path):
-    with pytest.raises(ValueError, match="Unsupported embedding model"):
-        CodeEmbedder(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            cache_dir=str(tmp_path),
-            device="cpu",
-        )
+def test_code_embedder_accepts_generic_sentence_transformer_models(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeSentenceTransformerModel:
+        def __init__(self, model_name, cache_dir=None, device="auto"):
+            captured["model_name"] = model_name
+            captured["cache_dir"] = cache_dir
+            captured["device"] = device
+
+        def cleanup(self):
+            pass
+
+    monkeypatch.setattr("embeddings.embedder.SentenceTransformerModel", FakeSentenceTransformerModel)
+
+    embedder = CodeEmbedder(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        cache_dir=str(tmp_path),
+        device="cpu",
+    )
+
+    assert captured == {
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+        "cache_dir": str(tmp_path),
+        "device": "cpu",
+    }
+    embedder.cleanup()
 
 
-def test_code_embedder_rejects_non_google_embeddinggemma_models(tmp_path):
-    with pytest.raises(ValueError, match="Unsupported embedding model"):
-        CodeEmbedder(
-            model_name="someone/embeddinggemma-custom",
-            cache_dir=str(tmp_path),
-            device="cpu",
-        )
+def test_code_embedder_reads_model_from_local_install_config(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeSentenceTransformerModel:
+        def __init__(self, model_name, cache_dir=None, device="auto"):
+            captured["model_name"] = model_name
+            captured["cache_dir"] = cache_dir
+            captured["device"] = device
+
+        def cleanup(self):
+            pass
+
+    monkeypatch.delenv("CODE_SEARCH_MODEL", raising=False)
+    monkeypatch.setenv("CODE_SEARCH_STORAGE", str(tmp_path))
+    get_storage_dir.cache_clear()
+    save_local_install_config("Salesforce/SFR-Embedding-Code-400M_R", storage_dir=tmp_path)
+    monkeypatch.setattr("embeddings.embedder.SentenceTransformerModel", FakeSentenceTransformerModel)
+
+    embedder = CodeEmbedder(device="cpu")
+
+    assert captured["model_name"] == "Salesforce/SFR-Embedding-Code-400M_R"
+    assert captured["device"] == "cpu"
+    embedder.cleanup()
+    get_storage_dir.cache_clear()
 
 
-def test_code_embedder_rejects_mixed_case_embeddinggemma_prefix(tmp_path):
-    with pytest.raises(ValueError, match="Unsupported embedding model"):
-        CodeEmbedder(
-            model_name="Google/embeddinggemma-custom",
-            cache_dir=str(tmp_path),
-            device="cpu",
-        )
+def test_code_embedder_uses_gemma_prompt_names(monkeypatch, tmp_path):
+    calls = []
+
+    class FakeGemmaModel:
+        def __init__(self, cache_dir=None, device="auto"):
+            self.model = object()
+
+        def encode(self, texts, **kwargs):
+            calls.append((texts, kwargs))
+            return np.ones((len(texts), 3), dtype=np.float32)
+
+        def cleanup(self):
+            pass
+
+        def get_model_info(self):
+            return {"status": "loaded"}
+
+    monkeypatch.setitem(
+        __import__("embeddings.embedding_models_register", fromlist=["AVAILIABLE_MODELS"]).AVAILIABLE_MODELS,
+        "google/embeddinggemma-300m",
+        FakeGemmaModel,
+    )
+
+    embedder = CodeEmbedder(
+        model_name="google/embeddinggemma-300m",
+        cache_dir=str(tmp_path),
+        device="cpu",
+    )
+    chunk = CodeChunk(
+        content="def greet():\n    return 'hi'",
+        chunk_type="function",
+        start_line=1,
+        end_line=2,
+        file_path="example.py",
+        relative_path="example.py",
+        folder_structure=[],
+        name="greet",
+    )
+
+    embedder.embed_chunk(chunk)
+    embedder.embed_query("greeting helper")
+
+    assert calls[0][1]["prompt_name"] == "Retrieval-document"
+    assert calls[1][1]["prompt_name"] == "InstructionRetrieval"
+    embedder.cleanup()
+
+
+def test_code_embedder_uses_local_prefix_overrides_for_generic_models(monkeypatch, tmp_path):
+    calls = []
+
+    class FakeSentenceTransformerModel:
+        def __init__(self, model_name, cache_dir=None, device="auto"):
+            self.model_name = model_name
+            self.model = object()
+
+        def encode(self, texts, **kwargs):
+            calls.append((texts, kwargs))
+            return np.ones((len(texts), 3), dtype=np.float32)
+
+        def cleanup(self):
+            pass
+
+        def get_model_info(self):
+            return {"status": "loaded"}
+
+    monkeypatch.delenv("CODE_SEARCH_MODEL", raising=False)
+    monkeypatch.setenv("CODE_SEARCH_STORAGE", str(tmp_path))
+    get_storage_dir.cache_clear()
+    save_local_install_config(
+        "intfloat/e5-base-v2",
+        storage_dir=tmp_path,
+        overrides={
+            "document_prefix": "passage: ",
+            "query_prefix": "query: ",
+        },
+    )
+    monkeypatch.setattr("embeddings.embedder.SentenceTransformerModel", FakeSentenceTransformerModel)
+
+    embedder = CodeEmbedder(device="cpu")
+    chunk = CodeChunk(
+        content="def greet():\n    return 'hi'",
+        chunk_type="function",
+        start_line=1,
+        end_line=2,
+        file_path="example.py",
+        relative_path="example.py",
+        folder_structure=[],
+        name="greet",
+    )
+
+    embedder.embed_chunk(chunk)
+    embedder.embed_query("greeting helper")
+
+    assert calls[0][0][0].startswith("passage: ")
+    assert "prompt_name" not in calls[0][1]
+    assert calls[1][0][0] == "query: greeting helper"
+    assert "prompt_name" not in calls[1][1]
+    embedder.cleanup()
+    get_storage_dir.cache_clear()
+
+
+def test_save_local_install_config_preserves_existing_embedding_settings(tmp_path):
+    save_local_install_config(
+        "intfloat/e5-base-v2",
+        storage_dir=tmp_path,
+        overrides={
+            "query_prefix": "query: ",
+            "document_prefix": "passage: ",
+        },
+    )
+
+    save_local_install_config(
+        "Salesforce/SFR-Embedding-Code-400M_R",
+        storage_dir=tmp_path,
+    )
+
+    config = load_local_install_config(tmp_path)
+    assert config["embedding_model"]["model_name"] == "Salesforce/SFR-Embedding-Code-400M_R"
+    assert config["embedding_model"]["query_prefix"] == "query: "
+    assert config["embedding_model"]["document_prefix"] == "passage: "

@@ -145,16 +145,16 @@ class LanguageChunker(ABC):
                 )
                 chunks.append(chunk)
 
-                # For classes, continue traversing to find methods
+                # For class/object-like containers, continue traversing to find nested members
                 # For other chunked nodes, stop traversal
-                if node.type in ['class_definition', 'class_declaration']:
-                    # Pass class info to children
-                    class_info = {
+                if node.type in ['class_definition', 'class_declaration', 'object_declaration', 'companion_object']:
+                    parent_type = metadata.get('declaration_kind', 'class')
+                    container_info = {
                         'parent_name': metadata.get('name'),
-                        'parent_type': 'class'
+                        'parent_type': parent_type
                     }
                     for child in node.children:
-                        traverse(child, depth + 1, class_info)
+                        traverse(child, depth + 1, container_info)
                 return
 
             # Traverse children, passing along parent info

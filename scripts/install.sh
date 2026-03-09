@@ -7,7 +7,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/FarhanAliRaza/claude-context-local"
 PROJECT_DIR="${HOME}/.local/share/claude-context-local"
-STORAGE_DIR="${HOME}/.claude_code_search"
+STORAGE_DIR="${CODE_SEARCH_STORAGE:-${HOME}/.claude_code_search}"
 MODEL_NAME="${CODE_SEARCH_MODEL:-google/embeddinggemma-300m}"
 
 print() { printf "%b\n" "$1"; }
@@ -165,6 +165,9 @@ if [[ "${IS_UPDATE}" -eq 1 ]]; then
   printf "${YELLOW}💡 Notes:${NC}\n"
   printf "%s\n" "• Your embeddings and indexed projects are preserved"
   printf "%s\n" "• Only the code was updated; your data remains intact"
+  printf "%s\n" "• Selected embedding model: ${MODEL_NAME}"
+  printf "%s\n" "• To switch models later, re-run the installer with CODE_SEARCH_MODEL=<huggingface-model>"
+  printf "%s\n" "• The local install stores its model choice in ${STORAGE_DIR}/install_config.json"
 else
   hr; printf "${GREEN}${BOLD}✅ Install complete!${NC}\n"; hr
   
@@ -187,5 +190,7 @@ else
   printf "${YELLOW}💡 Notes:${NC}\n"
   printf "%s\n" "• To update later, re-run this installer"
   printf "%s\n" "• Your embeddings will be stored in ${STORAGE_DIR}"
+  printf "%s\n" "• Selected embedding model: ${MODEL_NAME}"
+  printf "%s\n" "• To switch models later, re-run the installer with CODE_SEARCH_MODEL=<huggingface-model>"
+  printf "%s\n" "• The local install stores its model choice in ${STORAGE_DIR}/install_config.json"
 fi
-

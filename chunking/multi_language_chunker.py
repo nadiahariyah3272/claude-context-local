@@ -66,7 +66,7 @@ class MultiLanguageChunker:
             logger.debug(f"File type not supported: {file_path}")
             return []
 
-        # Use tree-sitter for all  languages 
+        # Use tree-sitter for all languages
         try:
             tree_chunks = self.tree_sitter_chunker.chunk_file(file_path)
             # Convert TreeSitterChunk to CodeChunk
@@ -91,7 +91,9 @@ class MultiLanguageChunker:
             # Extract metadata
             name = tchunk.metadata.get('name')
             docstring = tchunk.metadata.get('docstring')
-            decorators = tchunk.metadata.get('decorators', [])
+            # 'annotations' carries Kotlin/JVM @Annotation names; fall back to
+            # 'decorators' used by the Python AST chunker.
+            decorators = tchunk.metadata.get('annotations', tchunk.metadata.get('decorators', []))
             
             # Map tree-sitter node types to our chunk types
             chunk_type_map = {
@@ -122,8 +124,12 @@ class MultiLanguageChunker:
                 'mod_item': 'module',  # Rust
                 'macro_definition': 'macro',  # Rust
                 'constructor_declaration': 'constructor',  # Java/C#
+                'secondary_constructor': 'constructor',  # Kotlin
+                'anonymous_initializer': 'init',  # Kotlin init { } blocks
                 'destructor_declaration': 'destructor',  # C#
                 'property_declaration': 'property',  # C#
+                'object_declaration': 'object',  # Kotlin
+                'companion_object': 'object',  # Kotlin
                 'event_declaration': 'event',  # C#
                 'template_declaration': 'template',  # C++
                 'concept_definition': 'concept',  # C++
@@ -136,6 +142,11 @@ class MultiLanguageChunker:
             }
             
             chunk_type = chunk_type_map.get(tchunk.node_type, tchunk.node_type)
+            declaration_kind = tchunk.metadata.get('declaration_kind')
+            # Some grammars reuse a broad node type (for example Kotlin class_declaration)
+            # and expose the more specific kind in metadata instead.
+            if declaration_kind in {'interface', 'enum', 'object', 'property', 'init'}:
+                chunk_type = declaration_kind
             
             # Extract parent name and adjust chunk type for methods
             parent_name = tchunk.metadata.get('parent_name')
@@ -144,13 +155,15 @@ class MultiLanguageChunker:
             if parent_name and chunk_type == 'function':
                 chunk_type = 'method'
             
-            # Build folder structure from file path
+            # Build folder structure and relative path from file path
             path = Path(file_path)
             folder_parts = []
+            relative_path_str = str(path)
             if self.root_path:
                 try:
                     rel_path = path.relative_to(self.root_path)
                     folder_parts = list(rel_path.parent.parts)
+                    relative_path_str = str(rel_path)
                 except ValueError:
                     folder_parts = [path.parent.name] if path.parent.name else []
             else:
@@ -168,6 +181,8 @@ class MultiLanguageChunker:
                 tags.append('generic')
             if tchunk.metadata.get('is_component'):
                 tags.append('component')
+            if tchunk.metadata.get('is_extension'):
+                tags.append('extension')
             
             # Add language tag
             tags.append(tchunk.language)
@@ -175,7 +190,7 @@ class MultiLanguageChunker:
             # Create CodeChunk
             chunk = CodeChunk(
                 file_path=str(path),
-                relative_path=str(path.relative_to(self.root_path)) if self.root_path else str(path),
+                relative_path=relative_path_str,
                 folder_structure=folder_parts,
                 chunk_type=chunk_type,
                 content=tchunk.content,

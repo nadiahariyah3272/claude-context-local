@@ -18,6 +18,7 @@ from embeddings.huggingface_auth import (
     build_huggingface_auth_error,
     configure_huggingface_auth,
 )
+from common_utils import save_local_install_config
 
 
 def download_model(model_name: str = "google/embeddinggemma-300m", storage_dir: str = None):
@@ -50,6 +51,8 @@ def download_model(model_name: str = "google/embeddinggemma-300m", storage_dir: 
         print(f"Model downloaded successfully!")
         print(f"Embedding dimension: {embedding.shape[1]}")
         print(f"Model cached in: {models_dir}")
+        config_path = save_local_install_config(model_name, storage_dir=storage_path)
+        print(f"Local install config updated: {config_path}")
         
         return True
         
