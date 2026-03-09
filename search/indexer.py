@@ -33,6 +33,8 @@ class CodeIndexManager:
         self._chunk_ids = []
         self._logger = logging.getLogger(__name__)
         self._on_gpu = False
+        self._stats_cache = None
+        self._file_chunk_counts = {}
         
     @property
     def index(self):
@@ -187,7 +189,8 @@ class CodeIndexManager:
         faiss.normalize_L2(query_embedding)
         
         # Search in FAISS index
-        search_k = min(k * 3, index.ntotal)  # Get more results for filtering
+        search_multiplier = 10 if filters else 1
+        search_k = min(k * search_multiplier, index.ntotal)
         similarities, indices = index.search(query_embedding, search_k)
         
         results = []
@@ -248,6 +251,14 @@ class CodeIndexManager:
         """Retrieve chunk metadata by ID."""
         metadata_entry = self.metadata_db.get(chunk_id)
         return metadata_entry['metadata'] if metadata_entry else None
+
+    def get_file_chunk_count(self, relative_path: str) -> int:
+        """Return the number of indexed chunks for a specific file."""
+        if not relative_path:
+            return 0
+        if relative_path not in self._file_chunk_counts:
+            self.get_stats()
+        return self._file_chunk_counts.get(relative_path, 0)
     
     def get_similar_chunks(self, chunk_id: str, k: int = 5) -> List[Tuple[str, float, Dict[str, Any]]]:
         """Find chunks similar to a given chunk."""
@@ -314,6 +325,7 @@ class CodeIndexManager:
             self.metadata_db.commit()
         except Exception:
             pass
+        self._update_stats()
         return len(chunks_to_remove)
     
     def save_index(self):
@@ -381,10 +393,13 @@ class CodeIndexManager:
         
         stats.update({
             'files_indexed': len(file_counts),
+            'file_chunk_counts': file_counts,
             'top_folders': dict(sorted(folder_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
             'chunk_types': chunk_type_counts,
             'top_tags': dict(sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:20])
         })
+        self._file_chunk_counts = file_counts
+        self._stats_cache = stats
         
         # Save stats
         with open(self.stats_path, 'w') as f:
@@ -392,16 +407,24 @@ class CodeIndexManager:
     
     def get_stats(self) -> Dict[str, Any]:
         """Get index statistics."""
+        if self._stats_cache is not None:
+            return self._stats_cache
         if self.stats_path.exists():
             with open(self.stats_path, 'r') as f:
-                return json.load(f)
+                stats = json.load(f)
+            self._stats_cache = stats
+            self._file_chunk_counts = stats.get('file_chunk_counts', {})
+            return stats
         else:
-            return {
+            stats = {
                 'total_chunks': 0,
                 'index_size': 0,
                 'embedding_dimension': 0,
                 'files_indexed': 0
             }
+            self._stats_cache = stats
+            self._file_chunk_counts = {}
+            return stats
     
     def get_index_size(self) -> int:
         """Get the number of chunks in the index."""
@@ -422,6 +445,8 @@ class CodeIndexManager:
         # Reset in-memory state
         self._index = None
         self._chunk_ids = []
+        self._stats_cache = None
+        self._file_chunk_counts = {}
         
         self._logger.info("Index cleared")
     

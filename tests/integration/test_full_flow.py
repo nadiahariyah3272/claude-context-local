@@ -10,8 +10,36 @@ from pathlib import Path
 from chunking.multi_language_chunker import MultiLanguageChunker
 from embeddings.embedder import EmbeddingResult
 from search.indexer import CodeIndexManager
-from search.searcher import IntelligentSearcher
+from search.searcher import IntelligentSearcher, SearchResult
 from merkle import MerkleDAG, SnapshotManager, ChangeDetector
+
+
+class _FakeFaissIndex:
+    """Small fake FAISS-like index for targeted search tests."""
+
+    def __init__(self, ntotal, results_by_k=None):
+        self.ntotal = ntotal
+        self.d = 768
+        self.results_by_k = results_by_k or {}
+        self.requested_ks = []
+
+    def search(self, query_embedding, k):
+        self.requested_ks.append(k)
+        result_k = self.results_by_k.get(k, k)
+        indices = np.arange(result_k, dtype=np.int64).reshape(1, -1)
+        similarities = np.linspace(1.0, 0.5, result_k, dtype=np.float32).reshape(1, -1)
+        return similarities, indices
+
+
+class _StubIndexManager:
+    """Minimal index manager stub for searcher-level sizing tests."""
+
+    def __init__(self):
+        self.calls = []
+
+    def search(self, query_embedding, k, filters=None):
+        self.calls.append({"k": k, "filters": filters})
+        return []
 
 
 class TestFullSearchFlow:
@@ -352,6 +380,7 @@ class TestFullSearchFlow:
         # Check basic statistics
         assert stats['total_chunks'] == len(embeddings)
         assert stats['files_indexed'] > 0
+        assert 'file_chunk_counts' in stats
         assert 'chunk_types' in stats
         assert 'top_tags' in stats
         
@@ -367,6 +396,137 @@ class TestFullSearchFlow:
         print(f"Top tags: {stats.get('top_tags', {})}")
         
         # This gives us insights into what was actually indexed from our test project
+
+    def test_search_context_reports_actual_file_chunk_counts(self, test_project_path, mock_storage_dir):
+        """Search context should report chunk counts for the matched file, not total files."""
+        chunker = MultiLanguageChunker(str(test_project_path))
+        all_chunks = []
+
+        for py_file in test_project_path.rglob("*.py"):
+            all_chunks.extend(chunker.chunk_file(str(py_file)))
+
+        embeddings = self._create_embeddings_from_chunks(all_chunks)
+
+        index_manager = CodeIndexManager(str(mock_storage_dir))
+        index_manager.create_index(768, "flat")
+        index_manager.add_embeddings(embeddings)
+
+        class TestEmbedder:
+            def embed_query(self, query):
+                return np.random.RandomState(abs(hash(query)) % 10000).random(768).astype(np.float32)
+
+        searcher = IntelligentSearcher(index_manager, TestEmbedder())
+
+        target_embedding = embeddings[0]
+        matched_result = searcher._create_search_result(
+            target_embedding.chunk_id,
+            0.99,
+            target_embedding.metadata,
+            context_depth=1,
+        )
+
+        expected_count = sum(
+            1 for embedding in embeddings
+            if embedding.metadata['relative_path'] == matched_result.relative_path
+        )
+        assert matched_result.context_info['file_context']['total_chunks_in_file'] == expected_count
+
+    def test_filtered_search_optimizes_candidate_pool(self, mock_storage_dir):
+        """Filtered searches should inspect a larger candidate pool, while unfiltered searches should stay tight."""
+        index_manager = CodeIndexManager(str(mock_storage_dir))
+        index_manager._index = _FakeFaissIndex(ntotal=60)
+        index_manager._chunk_ids = [f"chunk-{i}" for i in range(60)]
+
+        for i, chunk_id in enumerate(index_manager._chunk_ids):
+            chunk_type = 'function' if 35 <= i < 40 else 'module'
+            index_manager.metadata_db[chunk_id] = {
+                'index_id': i,
+                'metadata': {
+                    'chunk_type': chunk_type,
+                    'relative_path': f"file_{i}.py",
+                    'file_path': f"/tmp/file_{i}.py",
+                    'tags': [],
+                    'folder_structure': [],
+                }
+            }
+        index_manager.metadata_db.commit()
+
+        query_embedding = np.random.random(768).astype(np.float32)
+
+        filtered_results = index_manager.search(
+            query_embedding,
+            k=5,
+            filters={'chunk_type': 'function'}
+        )
+        assert len(filtered_results) == 5
+        assert all(metadata['chunk_type'] == 'function' for _, _, metadata in filtered_results)
+
+        unfiltered_results = index_manager.search(query_embedding, k=5)
+        assert len(unfiltered_results) == 5
+        assert index_manager._index.requested_ks == [50, 5]
+
+    def test_searcher_passes_requested_k_without_double_expansion(self):
+        """Searcher should delegate candidate-pool sizing to the index manager."""
+        index_manager = _StubIndexManager()
+
+        class TestEmbedder:
+            def embed_query(self, query):
+                return np.random.RandomState(abs(hash(query)) % 10000).random(768).astype(np.float32)
+
+        searcher = IntelligentSearcher(index_manager, TestEmbedder())
+        results = searcher.search("UserHandler", k=7, filters={"chunk_type": "class"})
+
+        assert results == []
+        assert index_manager.calls == [
+            {"k": 7, "filters": {"chunk_type": "class"}}
+        ]
+
+    def test_rank_results_handles_camel_case_entity_queries(self, mock_storage_dir):
+        """CamelCase entity queries should still receive name-based ranking boosts."""
+        index_manager = CodeIndexManager(str(mock_storage_dir))
+
+        class TestEmbedder:
+            def embed_query(self, query):
+                return np.random.random(768).astype(np.float32)
+
+        searcher = IntelligentSearcher(index_manager, TestEmbedder())
+        results = [
+            SearchResult(
+                chunk_id="module",
+                similarity_score=0.8,
+                content_preview="module",
+                file_path="src/module.py",
+                relative_path="src/module.py",
+                folder_structure=["src"],
+                chunk_type="module",
+                name="helpers",
+                parent_name=None,
+                start_line=1,
+                end_line=10,
+                docstring=None,
+                tags=[],
+                context_info={},
+            ),
+            SearchResult(
+                chunk_id="class",
+                similarity_score=0.8,
+                content_preview="class UserHandler",
+                file_path="src/user_handler.py",
+                relative_path="src/user_handler.py",
+                folder_structure=["src"],
+                chunk_type="class",
+                name="UserHandler",
+                parent_name=None,
+                start_line=1,
+                end_line=25,
+                docstring=None,
+                tags=[],
+                context_info={},
+            ),
+        ]
+
+        ranked = searcher._rank_results(results, "UserHandler", [])
+        assert ranked[0].name == "UserHandler"
     
     def test_incremental_indexing_with_merkle(self, test_project_path, mock_storage_dir):
         """Test incremental indexing using Merkle tree change detection."""
