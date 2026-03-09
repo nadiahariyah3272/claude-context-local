@@ -3,10 +3,12 @@
 import logging
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
+import os
 import numpy as np
 
 from chunking.code_chunk import CodeChunk
 from embeddings.embedding_models_register import AVAILIABLE_MODELS
+from embeddings.sentence_transformer import SentenceTransformerModel
 from common_utils import get_storage_dir
 
 
@@ -23,7 +25,7 @@ class CodeEmbedder:
 
     def __init__(
         self,
-        model_name: str = "google/embeddinggemma-300m",
+        model_name: Optional[str] = None,
         cache_dir: Optional[str] = None,
         device: str = "auto"
     ):
@@ -34,13 +36,27 @@ class CodeEmbedder:
             cache_dir: Directory to cache the model
             device: Device to load model on
         """
+        model_name = model_name or os.getenv("CODE_SEARCH_MODEL", "google/embeddinggemma-300m")
         if not cache_dir: # if not provided, use default
             cache_dir = str(get_storage_dir() / "models")
         self.device = device
 
         # Get model class from available models
-        model_class = AVAILIABLE_MODELS[model_name]
-        self._model = model_class(cache_dir=cache_dir, device=device)
+        model_class = AVAILIABLE_MODELS.get(model_name)
+        if model_class:
+            self._model = model_class(cache_dir=cache_dir, device=device)
+        elif model_name.startswith("google/embeddinggemma-"):
+            self._model = SentenceTransformerModel(
+                model_name=model_name,
+                cache_dir=cache_dir,
+                device=device
+            )
+        else:
+            available_models = ", ".join(sorted(AVAILIABLE_MODELS))
+            raise ValueError(
+                f"Unsupported embedding model '{model_name}'. Supported defaults: {available_models}. "
+                "You may also set CODE_SEARCH_MODEL to another compatible EmbeddingGemma variant."
+            )
 
         self._logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.INFO)

@@ -10,6 +10,10 @@ from sentence_transformers import SentenceTransformer
 import torch
 
 from embeddings.embedding_model import EmbeddingModel
+from embeddings.huggingface_auth import (
+    build_huggingface_auth_error,
+    configure_huggingface_auth,
+)
 
 
 class SentenceTransformerModel(EmbeddingModel):
@@ -38,6 +42,8 @@ class SentenceTransformerModel(EmbeddingModel):
     def model(self):
         """Load and cache the SentenceTransformer model."""
         self._logger.info(f"Loading model: {self.model_name}")
+        if configure_huggingface_auth():
+            self._logger.debug("Configured Hugging Face authentication from local environment or token cache.")
 
         # If the model appears to be cached locally, enable offline mode
         local_model_dir = None
@@ -63,8 +69,9 @@ class SentenceTransformerModel(EmbeddingModel):
             self._model_loaded = True
             return model
         except Exception as e:
-            self._logger.error(f"Failed to load model: {e}")
-            raise
+            detailed_error = build_huggingface_auth_error(self.model_name, e)
+            self._logger.error(f"Failed to load model: {detailed_error}")
+            raise RuntimeError(detailed_error) from e
 
     def encode(self, texts: list[str], **kwargs) -> np.ndarray:
         """Encode texts using SentenceTransformer.
