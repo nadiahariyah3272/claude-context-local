@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Command-line tool for indexing a Python codebase."""
+"""Command-line tool for indexing a codebase for semantic search."""
 
 import sys
 import argparse
 import logging
+import os
 from pathlib import Path
 
 # Add the parent directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from common_utils import VERSION
 from chunking.multi_language_chunker import MultiLanguageChunker
 from embeddings.embedder import CodeEmbedder
 from search.indexer import CodeIndexManager
@@ -25,11 +27,26 @@ def setup_logging(verbose: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Index a Python codebase for semantic search"
+        description="Index a codebase for semantic search.",
+        epilog=(
+            "Examples:\n"
+            "  %(prog)s /path/to/project\n"
+            "  %(prog)s /path/to/project --clear --verbose\n"
+            "  %(prog)s . --storage-dir /custom/location\n"
+            "\n"
+            "Supported languages: Python, JavaScript, TypeScript, Java, Kotlin, Go,\n"
+            "Rust, C, C++, C#, Markdown, Svelte (18 file extensions total).\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"claude-context-local {VERSION}",
     )
     parser.add_argument(
         "directory",
-        help="Directory containing Python files to index"
+        help="Directory containing source files to index"
     )
     parser.add_argument(
         "--storage-dir",
@@ -62,14 +79,16 @@ def main():
     directory_path = Path(args.directory).resolve()
     if not directory_path.exists():
         logger.error(f"Directory does not exist: {directory_path}")
+        logger.error("Please check the path and ensure it is accessible.")
         sys.exit(1)
     
     if not directory_path.is_dir():
         logger.error(f"Path is not a directory: {directory_path}")
+        logger.error("Please provide a path to a directory, not a file.")
         sys.exit(1)
     
-    # Setup storage
-    storage_dir = Path(args.storage_dir)
+    # Setup storage (use os.path.expanduser for cross-platform ~ expansion)
+    storage_dir = Path(os.path.expanduser(args.storage_dir)).resolve()
     storage_dir.mkdir(parents=True, exist_ok=True)
     
     try:
@@ -95,14 +114,15 @@ def main():
             index_manager.clear_index()
         
         # Chunk the codebase
-        logger.info("Parsing and chunking Python files...")
+        logger.info("Parsing and chunking source files...")
         chunks = chunker.chunk_directory()
         
         if not chunks:
-            logger.error("No Python files found or no chunks extracted")
+            logger.error("No supported source files found or no chunks extracted.")
+            logger.error("Supported extensions: .py, .js, .jsx, .ts, .tsx, .java, .kt, .kts, .go, .rs, .c, .cpp, .cs, .md, .svelte")
             sys.exit(1)
         
-        logger.info(f"Generated {len(chunks)} chunks from Python files")
+        logger.info(f"Generated {len(chunks)} chunks from source files")
         
         # Display some statistics
         chunk_types = {}

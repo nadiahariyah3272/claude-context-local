@@ -5,31 +5,57 @@ tools:
     Full usage: search_code("authentication", k=10, file_pattern="*.py")
 
   index_directory: |
-    Index a codebase using semantic embeddings.
+    Index a codebase using semantic embeddings. Supports 18 file extensions across Python, JavaScript, TypeScript, Java, Kotlin, Go, Rust, C, C++, C#, Markdown, and Svelte. Incremental by default.
     Minimal usage: index_directory("/path/to/project")
     Full usage: index_directory("/path/to/project", project_name="project", file_pattern="*.py", incremental=False)
 
   find_similar_code: |
     Find code chunks functionally similar to a reference chunk. Useful for finding alternative implementations, code duplication, or refactoring related code.
     Usage: find_similar_code(chunk_id from search_code, k=5)
+    Tip: Get a chunk_id from search_code results first.
 
-  get_index_status: Get current index statistics and model status.
+  get_index_status: |
+    Get current index statistics and model status. Shows total chunks, files indexed, embedding dimension, chunk type distribution, top tags, and model information.
 
-  list_projects: List all indexed projects with their metadata.
+  list_projects: |
+    List all indexed projects with their metadata, index stats, and creation dates. Shows the currently active project.
 
   switch_project: |
-    Switch to a different indexed project for searching.
+    Switch to a different indexed project for searching. Requires the project to be already indexed.
     Usage: switch_project("/path/to/project")
+    Error: Returns a suggestion to run index_directory first if the project is not yet indexed.
 
-  index_test_project: Index test project
+  index_test_project: |
+    Index the built-in sample project for testing purposes. Includes authentication, database, API, and utility modules.
 
-  clear_index: Clear the search index and metadata for the current project.
+  clear_index: |
+    Clear the search index and metadata for the current project. Requires an active project (use index_directory first).
 
 help: |
-  # Find similar code
+  # Claude Context Local – Code Search Help
 
-  1. Index a codebase: `index_directory("/path/to/project")`
-  2. Search: `search_code("description of code you want")`
-  3. Find similar: `find_similar_code(chunk_id from search_code)`
+  ## Quick Start
+  1. **Index your codebase**: Open Claude Code in your project and say "index this codebase"
+  2. **Search**: Say "search for authentication logic" or use search_code("authentication")
+  3. **Find similar code**: Use find_similar_code(chunk_id) with a chunk_id from search results
 
-  See tool descriptions for details and available options.
+  ## Available Tools
+  - **search_code(query)**: Semantic code search by natural language
+  - **index_directory(path)**: Index a project directory
+  - **find_similar_code(chunk_id)**: Find code similar to a given chunk
+  - **get_index_status()**: View index and model information
+  - **list_projects()**: List all indexed projects
+  - **switch_project(path)**: Switch active project
+  - **clear_index()**: Clear current project index
+
+  ## Search Tips
+  - Use natural language: "error handling in the API layer"
+  - Filter by file: search_code("auth", file_pattern="*.py")
+  - Filter by type: search_code("validation", chunk_type="function")
+  - Increase results: search_code("database", k=20)
+
+  ## Troubleshooting
+  - **No results?** Make sure the project is indexed first
+  - **Wrong project?** Use list_projects() and switch_project()
+  - **Stale results?** Re-index with index_directory(path, incremental=False)
+  - **CLI diagnostics**: Run `python scripts/cli.py doctor` for health checks

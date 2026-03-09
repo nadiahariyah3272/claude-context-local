@@ -13,6 +13,12 @@ MODEL_NAME="${CODE_SEARCH_MODEL:-google/embeddinggemma-300m}"
 print() { printf "%b\n" "$1"; }
 hr() { print "\n==================================================\n"; }
 
+# Detect WSL environment
+IS_WSL=0
+if [[ -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+  IS_WSL=1
+fi
+
 hr; print "Installing Claude Context Local"; hr
 
 # 1) Ensure git is available
@@ -193,4 +199,15 @@ else
   printf "%s\n" "• Selected embedding model: ${MODEL_NAME}"
   printf "%s\n" "• To switch models later, re-run the installer with CODE_SEARCH_MODEL=<huggingface-model>"
   printf "%s\n" "• The local install stores its model choice in ${STORAGE_DIR}/install_config.json"
+fi
+
+# WSL-specific guidance
+if [[ "${IS_WSL}" -eq 1 ]]; then
+  printf "\n${YELLOW}${BOLD}🐧 WSL2 Detected${NC}\n"
+  printf "%s\n" "• If Claude Desktop is installed on Windows, you may also need to register"
+  printf "%s\n" "  the MCP server from a Windows terminal using the Windows-side path."
+  printf "%s\n" "• Hugging Face tokens cached in Windows may not be visible in WSL."
+  printf "%s\n" "  Set HF_TOKEN explicitly in your WSL shell if needed:"
+  printf "   ${BLUE}export HF_TOKEN=hf_xxx${NC}\n"
+  printf "%s\n" "• Run 'python scripts/cli.py doctor' for a full health check."
 fi
