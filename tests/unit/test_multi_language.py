@@ -126,6 +126,9 @@ class TestMultiLanguageChunker:
         chunk_names = {chunk.name for chunk in chunks if chunk.name}
         chunk_types = {chunk.chunk_type for chunk in chunks}
 
+        # Structural assertions: these names/types were present before the richer
+        # metadata pass was added.  Keeping them ensures that metadata extraction
+        # improvements don't accidentally drop chunks or rename existing symbols.
         assert "Calculator" in chunk_names
         assert "MathOperations" in chunk_names
         assert "Operation" in chunk_names
@@ -137,7 +140,25 @@ class TestMultiLanguageChunker:
         assert "object" in chunk_types
         assert "property" in chunk_types
         assert "constructor" in chunk_types
-    
+
+        # init { } blocks are chunked with chunk_type 'init'
+        assert "init" in chunk_types
+
+        # KDoc comments are extracted as docstrings
+        assert any(c.docstring for c in chunks), "Expected at least one chunk with a KDoc docstring"
+
+        # @Annotations appear as decorators on the chunk they annotate
+        all_decorators = [dec for c in chunks for dec in (c.decorators or [])]
+        assert any(dec.startswith('@') for dec in all_decorators), (
+            "Expected at least one Kotlin @Annotation in chunk decorators"
+        )
+
+        # Extension functions get the 'extension' semantic tag
+        assert any('extension' in (c.tags or []) for c in chunks), (
+            "Expected an extension function chunk to carry the 'extension' tag"
+        )
+
+
     def test_chunk_go_file(self, chunker, test_data_dir):
         """Test chunking Go file."""
         file_path = test_data_dir / "calculator.go"

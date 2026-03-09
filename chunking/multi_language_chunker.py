@@ -91,7 +91,9 @@ class MultiLanguageChunker:
             # Extract metadata
             name = tchunk.metadata.get('name')
             docstring = tchunk.metadata.get('docstring')
-            decorators = tchunk.metadata.get('decorators', [])
+            # 'annotations' carries Kotlin/JVM @Annotation names; fall back to
+            # 'decorators' used by the Python AST chunker.
+            decorators = tchunk.metadata.get('annotations', tchunk.metadata.get('decorators', []))
             
             # Map tree-sitter node types to our chunk types
             chunk_type_map = {
@@ -123,6 +125,7 @@ class MultiLanguageChunker:
                 'macro_definition': 'macro',  # Rust
                 'constructor_declaration': 'constructor',  # Java/C#
                 'secondary_constructor': 'constructor',  # Kotlin
+                'anonymous_initializer': 'init',  # Kotlin init { } blocks
                 'destructor_declaration': 'destructor',  # C#
                 'property_declaration': 'property',  # C#
                 'object_declaration': 'object',  # Kotlin
@@ -142,7 +145,7 @@ class MultiLanguageChunker:
             declaration_kind = tchunk.metadata.get('declaration_kind')
             # Some grammars reuse a broad node type (for example Kotlin class_declaration)
             # and expose the more specific kind in metadata instead.
-            if declaration_kind in {'interface', 'enum', 'object', 'property'}:
+            if declaration_kind in {'interface', 'enum', 'object', 'property', 'init'}:
                 chunk_type = declaration_kind
             
             # Extract parent name and adjust chunk type for methods
@@ -176,6 +179,8 @@ class MultiLanguageChunker:
                 tags.append('generic')
             if tchunk.metadata.get('is_component'):
                 tags.append('component')
+            if tchunk.metadata.get('is_extension'):
+                tags.append('extension')
             
             # Add language tag
             tags.append(tchunk.language)
