@@ -229,6 +229,45 @@ class TestMultiLanguageChunker:
         assert any(name in chunk_names for name in ["Calculator", "calculate_sum", "MathOperations", "Operation", "Point"])
         assert any(t in chunk_types for t in ["function", "struct", "trait", "enum", "impl", "macro"])
 
+        # impl blocks must be traversed so their methods get individual chunks
+        impl_method_chunks = [
+            c for c in chunks
+            if c.parent_name in {"Calculator", "Operation", "Point"}
+            and c.chunk_type in {"function", "method"}
+        ]
+        assert len(impl_method_chunks) > 0, (
+            "Expected methods inside Rust impl blocks to be individually indexed with parent_name set"
+        )
+
+    def test_chunk_java_interface_methods_have_parent_name(self, chunker, test_data_dir):
+        """Methods declared inside a Java interface should have parent_name set."""
+        file_path = test_data_dir / "Calculator.java"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        interface_method_chunks = [
+            c for c in chunks
+            if c.parent_name == "MathOperations"
+        ]
+        assert len(interface_method_chunks) > 0, (
+            "Expected method(s) inside Java interface MathOperations to have parent_name='MathOperations'"
+        )
+
+    def test_chunk_java_enum_methods_have_parent_name(self, chunker, test_data_dir):
+        """Methods declared inside a Java enum should have parent_name set."""
+        file_path = test_data_dir / "Calculator.java"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        enum_method_chunks = [
+            c for c in chunks
+            if c.parent_name == "Operation"
+            and c.chunk_type in {"function", "method"}
+        ]
+        assert len(enum_method_chunks) > 0, (
+            "Expected method(s) inside Java enum Operation to have parent_name='Operation'"
+        )
+
     def test_chunk_markdown_file(self, chunker, test_data_dir):
         """Test chunking Markdown file."""
         file_path = test_data_dir / "README.md"
@@ -337,6 +376,51 @@ class TestMultiLanguageChunker:
         chunker = MultiLanguageChunker(str(tmp_path))
 
         assert chunker.chunk_file(str(tmp_path / "large.toml")) == []
+
+    def test_non_utf8_indexing_config_falls_back_to_defaults(self, monkeypatch, tmp_path):
+        """A non-UTF-8 indexing config should not crash chunker initialization."""
+        # Isolate from any CODE_SEARCH_* env vars that might be set in the test runner
+        monkeypatch.delenv("CODE_SEARCH_EXCLUDE_EXTENSIONS", raising=False)
+        monkeypatch.delenv("CODE_SEARCH_MAX_STRUCTURED_FILE_LINES", raising=False)
+        monkeypatch.delenv("CODE_SEARCH_MAX_STRUCTURED_FILE_BYTES", raising=False)
+
+        (tmp_path / ".claude-context-local.json").write_bytes(b"\xff\xfe\x00\x00")
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+
+        assert chunker.excluded_extensions == set()
+        assert (
+            chunker.indexing_config["max_structured_file_lines"]
+            == MultiLanguageChunker.DEFAULT_MAX_STRUCTURED_FILE_LINES
+        )
+
+    def test_non_utf8_structured_file_is_skipped(self, tmp_path):
+        """Structured files that cannot be decoded as UTF-8 should be skipped safely."""
+        file_path = tmp_path / "broken.yaml"
+        file_path.write_bytes(b"\xff\xfe\x00\x00")
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+
+        assert chunker.chunk_file(str(file_path)) == []
+
+    def test_structured_chunks_keep_line_numbers(self, tmp_path):
+        """Structured chunk line estimates should remain stable after line indexing."""
+        file_path = tmp_path / "config.yaml"
+        file_path.write_text(
+            "database:\n"
+            "  host: localhost\n"
+            "services:\n"
+            "  api:\n"
+            "    port: 8080\n",
+            encoding="utf-8",
+        )
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+        chunks = {chunk.name: chunk for chunk in chunker.chunk_file(str(file_path))}
+
+        assert chunks["database"].start_line == 1
+        assert chunks["services"].start_line == 3
+        assert chunks["services.api"].start_line == 4
 
     def test_toml_with_datetime_values(self, tmp_path):
         """TOML files containing datetime values should be indexed without crashing."""

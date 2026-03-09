@@ -60,6 +60,38 @@ class TestCLICommands:
         assert "Running diagnostics" in out
         assert "Python" in out
 
+    def test_doctor_checks_runtime_fastmcp_import_path(self, monkeypatch, tmp_path, capsys):
+        """doctor should report 'mcp not importable' when the mcp package is broken."""
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "model.bin").write_text("cached", encoding="utf-8")
+
+        monkeypatch.setattr("scripts.cli._get_storage_dir_or_report", lambda _command: tmp_path)
+        monkeypatch.setattr(
+            "scripts.cli.load_local_install_config",
+            lambda storage_dir=None: {"embedding_model": {"model_name": "google/embeddinggemma-300m"}},
+        )
+        monkeypatch.setattr("scripts.cli.shutil.which", lambda _name: "/usr/bin/mock")
+        monkeypatch.setattr("scripts.cli.is_wsl", lambda: False)
+
+        def fake_import_module(name):
+            # Simulate the mcp package (and mcp.server.fastmcp) being broken,
+            # while fastmcp itself is available.
+            if name in ("mcp", "mcp.server.fastmcp"):
+                raise ModuleNotFoundError("broken mcp runtime import")
+            return object()
+
+        monkeypatch.setattr("scripts.cli.importlib.import_module", fake_import_module)
+
+        cmd_doctor()
+        out = capsys.readouterr().out
+
+        # The mcp check entry should report the failure with the correct package name
+        assert "mcp.server.fastmcp" in out
+        assert "mcp not importable" in out
+        # fastmcp itself should still be reported as available
+        assert "fastmcp importable" in out
+
     def test_status_runs_without_error(self, capsys):
         """status command should report index state."""
         cmd_status()

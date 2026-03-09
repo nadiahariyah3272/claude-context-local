@@ -26,7 +26,7 @@
 
 Claude Context without the cloud. Semantic code search that runs 100% locally using local embedding models on your own machine. No API keys, no costs, your code never leaves your machine.
 
-This repository is a fork of [tlines2016/claude-context-local](https://github.com/tlines2016/claude-context-local), with the install flow, chunking, and retrieval improvements in this fork published from `nadiahariyah3272/claude-context-local`.
+This fork tracks the upstream project at [tlines2016/claude-context-local](https://github.com/tlines2016/claude-context-local).
 
 - 🔍 **Find code by meaning, not strings**
 - 🔒 **100% local - completely private**
@@ -66,32 +66,73 @@ Claude’s code context is powerful, but sending your code to the cloud costs to
 - Disk: 1–2 GB free for the default model (larger alternatives need more)
 - Optional: NVIDIA GPU (CUDA 11/12) for FAISS acceleration; Apple Silicon (MPS) for embedding acceleration. These also speed up running the embedding model with SentenceTransformer, but everything still works on CPU.
 
+## 5-Minute Setup
+
+If you just want the shortest path to a working local setup:
+
+1. **Run the installer for your OS** from the commands in [Install & Update](#install--update).
+2. **If Hugging Face prompts for access**, accept the model terms and run:
+
+   ```bash
+   hf auth login
+   hf auth whoami
+   ```
+
+   If you are using a different shell than the one where you logged in, set `HF_TOKEN` in that same shell before retrying the install.
+
+3. **Register the MCP server**:
+
+   ```bash
+   claude mcp add code-search --scope user -- uv run --directory ~/.local/share/claude-context-local python mcp_server/server.py
+   ```
+
+4. **Verify the setup**:
+
+   ```bash
+   python scripts/cli.py doctor
+   claude mcp list
+   ```
+
+5. **Open Claude Code in your project** and say:
+
+   ```text
+   index this codebase
+   ```
+
+For platform-specific variations, run `python scripts/cli.py setup-guide`.
+
 ## Install & Update
 
 ### Install (one‑liner)
 
+> **Before running any installer:** You can review the scripts at
+> [install.sh](https://github.com/tlines2016/claude-context-local/blob/main/scripts/install.sh)
+> and [install.ps1](https://github.com/tlines2016/claude-context-local/blob/main/scripts/install.ps1)
+> on GitHub before executing them. This is best practice when piping scripts from the internet
+> directly into a shell.
+
 #### macOS / Linux / Git Bash
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.sh | bash
 ```
 
 If your system doesn't have `curl`, you can use `wget`:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.sh | bash
 ```
 
 #### Windows PowerShell
 
 ```powershell
-irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.ps1 | iex
 ```
 
 If PowerShell blocks script execution in your shell, use:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.ps1 | iex"
 ```
 
 #### Windows Command Prompt (`cmd.exe`)
@@ -99,7 +140,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/nad
 Open PowerShell from cmd and run the PowerShell installer:
 
 ```bat
-powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.ps1 | iex"
 ```
 
 #### WSL2 (Windows Subsystem for Linux)
@@ -107,7 +148,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/nad
 Install from your WSL terminal using the bash installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.sh | bash
 ```
 
 The installer automatically detects WSL2 and provides WSL-specific guidance after
@@ -119,13 +160,13 @@ register the MCP server from a Windows terminal as well.
 Run the same install command to update:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.sh | bash
 ```
 
 On Windows, re-run the PowerShell command instead:
 
 ```powershell
-irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.ps1 | iex
 ```
 
 The installer will:
@@ -143,12 +184,12 @@ Before running the installer, set `CODE_SEARCH_MODEL` to the Hugging Face model 
 
 ```bash
 export CODE_SEARCH_MODEL=Qwen/Qwen3-Embedding-0.6B
-curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.sh | bash
 ```
 
 ```powershell
 $env:CODE_SEARCH_MODEL="Qwen/Qwen3-Embedding-0.6B"
-irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/tlines2016/claude-context-local/main/scripts/install.ps1 | iex
 ```
 
 The installer downloads the chosen model and persists the selection in:
@@ -197,17 +238,28 @@ Interact via chat inside Claude Code; no function calls or commands are required
 
 A CLI tool is included for troubleshooting and setup guidance:
 
-```bash
-python scripts/cli.py help         # Show available commands
-python scripts/cli.py doctor       # Check installation health
-python scripts/cli.py setup-guide  # OS-specific setup instructions
-python scripts/cli.py status       # Show indexed projects
-python scripts/cli.py paths        # Show all paths used by the tool
-python scripts/cli.py version      # Print version info
-```
+| Command | What it helps with |
+| --- | --- |
+| `python scripts/cli.py help` | Show available commands and examples |
+| `python scripts/cli.py doctor` | Check Python, packages, storage, model cache, and platform-specific issues |
+| `python scripts/cli.py setup-guide` | Print OS-specific installation and MCP registration steps |
+| `python scripts/cli.py status` | Show indexed projects and current index status |
+| `python scripts/cli.py paths` | Show where models, storage, and config files live |
+| `python scripts/cli.py version` | Print version, platform, and Python details |
 
 The `doctor` command verifies your Python version, checks dependencies, validates
 storage directories, and detects WSL2/Windows environments.
+
+### 5) Optional manual indexing from the CLI
+
+If you want to validate indexing outside Claude Code first:
+
+```bash
+./scripts/index_codebase.py /path/to/project
+python scripts/cli.py status
+```
+
+That gives you a quick sanity check before you register or troubleshoot MCP integration.
 
 ## Architecture
 
@@ -374,6 +426,13 @@ accepting terms and/or authentication to download.
    store the token under your Windows profile while Git Bash uses a different `HOME`. If that
    happens, set `HF_TOKEN` explicitly in the same shell where you run the installer.
 
+4. A quick validation checklist before re-running install:
+
+   - `hf auth whoami` shows your Hugging Face account
+   - you already accepted the model terms on the model page
+   - `python scripts/cli.py doctor` reports the expected storage/model paths
+   - if you are on WSL, Git Bash, or switching shells, `HF_TOKEN` is exported in the current shell
+
 After the first successful download, we cache the model under `~/.claude_code_search/models`
 and prefer offline loads for speed and reliability.
 
@@ -497,16 +556,26 @@ python scripts/cli.py doctor
 
 This checks Python version, dependencies, storage paths, model cache, and platform-specific concerns (WSL2, Windows path mismatches, etc.).
 
+If you are still stuck after `doctor`, run:
+
+```bash
+python scripts/cli.py setup-guide
+python scripts/cli.py paths
+python scripts/cli.py status
+```
+
 ### Common Issues
 
-1. **Import errors**: Ensure all dependencies are installed with `uv sync`
-2. **Model download fails**: Check internet connection, disk space, Hugging Face auth, and whether you accepted the model terms
-3. **Memory issues**: Reduce batch size in indexing script
-4. **No search results**: Verify the codebase was indexed successfully
-5. **FAISS GPU not used**: Ensure `nvidia-smi` is available and CUDA drivers are installed; re-run installer to pick `faiss-gpu-cu12`/`cu11`.
-6. **Force offline**: We auto-detect a local cache and prefer offline loads; you can also set `HF_HUB_OFFLINE=1`.
-7. **401 / gated repo on Windows**: Run `hf auth whoami`. If that shows you are logged in but the installer still gets `401 Unauthorized`, set `HF_TOKEN` in the same shell where you run the installer and retry.
-8. **WSL2 path issues**: Run `python scripts/cli.py doctor` to check Windows interop. Hugging Face tokens cached in Windows may not be visible in WSL — set `HF_TOKEN` explicitly.
+| Problem | What to do |
+| --- | --- |
+| Import errors | Run `uv sync` from the repository root so the expected dependencies are installed into the project environment. |
+| Model download fails | Check network access, free disk space, Hugging Face auth, and whether you accepted the model terms on the model page. |
+| `401 Unauthorized` or gated model errors | Run `hf auth whoami`. If that succeeds but install still fails, set `HF_TOKEN` in the same shell where you run the installer and retry. |
+| WSL2 / Git Bash token mismatch | Run `python scripts/cli.py doctor` to confirm Windows interop. If Hugging Face tokens cached on Windows are not visible in the current shell, export `HF_TOKEN` explicitly. |
+| No search results | Re-index the repository, then run `python scripts/cli.py status` to confirm the project was indexed. |
+| Memory pressure during indexing | Try a smaller embedding model or index a smaller repository first to validate the setup end to end. |
+| FAISS GPU not used | Ensure `nvidia-smi` works and CUDA drivers are installed, then re-run the installer so it can select the GPU FAISS package when available. |
+| Need to work fully offline | We already prefer cached models automatically; you can also set `HF_HUB_OFFLINE=1`. |
 
 ### Ignored directories (for speed and noise reduction)
 
