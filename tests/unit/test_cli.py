@@ -1,0 +1,124 @@
+"""Unit tests for the CLI help and diagnostics tool."""
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from scripts.cli import (
+    cmd_doctor,
+    cmd_help,
+    cmd_paths,
+    cmd_setup_guide,
+    cmd_status,
+    cmd_version,
+    get_claude_config_paths,
+    get_default_install_dir,
+    get_platform_label,
+    is_windows,
+    is_wsl,
+    COMMANDS,
+)
+
+
+class TestCLICommands:
+    """Tests for CLI sub-commands."""
+
+    def test_help_runs_without_error(self, capsys):
+        """help command should print usage info."""
+        cmd_help()
+        out = capsys.readouterr().out
+        assert "Claude Context Local" in out
+        assert "COMMANDS" in out
+        assert "doctor" in out
+
+    def test_version_runs_without_error(self, capsys):
+        """version command should print version and platform."""
+        cmd_version()
+        out = capsys.readouterr().out
+        assert "claude-context-local" in out
+        assert "Python:" in out
+
+    def test_paths_runs_without_error(self, capsys):
+        """paths command should list storage and config paths."""
+        cmd_paths()
+        out = capsys.readouterr().out
+        assert "Storage directory" in out
+        assert "Install directory" in out
+
+    def test_doctor_runs_without_error(self, capsys):
+        """doctor command should run diagnostics."""
+        cmd_doctor()
+        out = capsys.readouterr().out
+        assert "Running diagnostics" in out
+        assert "Python" in out
+
+    def test_status_runs_without_error(self, capsys):
+        """status command should report index state."""
+        cmd_status()
+        out = capsys.readouterr().out
+        assert "Index Status" in out
+
+    def test_setup_guide_runs_without_error(self, capsys):
+        """setup-guide should print setup instructions."""
+        cmd_setup_guide()
+        out = capsys.readouterr().out
+        assert "Setup Guide" in out
+        assert "Install" in out
+        assert "Register the MCP server" in out
+
+    def test_unknown_command_exits_with_error(self):
+        """An unknown command should exit with code 1."""
+        result = subprocess.run(
+            [sys.executable, "scripts/cli.py", "nonexistent"],
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parent.parent.parent),
+        )
+        assert result.returncode == 1
+        assert "Unknown command" in result.stderr or "Unknown command" in result.stdout
+
+    def test_no_args_shows_help(self):
+        """Running with no args should show help."""
+        result = subprocess.run(
+            [sys.executable, "scripts/cli.py"],
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parent.parent.parent),
+        )
+        assert result.returncode == 0
+        assert "COMMANDS" in result.stdout
+
+
+class TestCLIPlatformHelpers:
+    """Tests for platform detection helpers."""
+
+    def test_is_windows_returns_bool(self):
+        assert isinstance(is_windows(), bool)
+
+    def test_is_wsl_returns_bool(self):
+        assert isinstance(is_wsl(), bool)
+
+    def test_get_platform_label_returns_string(self):
+        label = get_platform_label()
+        assert isinstance(label, str)
+        assert len(label) > 0
+
+    def test_get_default_install_dir_returns_path(self):
+        path = get_default_install_dir()
+        assert isinstance(path, Path)
+
+    def test_get_claude_config_paths_returns_list(self):
+        paths = get_claude_config_paths()
+        assert isinstance(paths, list)
+        assert all(isinstance(p, Path) for p in paths)
+
+    def test_commands_dict_contains_required_entries(self):
+        required = {"help", "--help", "-h", "doctor", "version", "--version", "status", "paths", "setup-guide"}
+        assert required.issubset(COMMANDS.keys())

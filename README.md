@@ -100,6 +100,18 @@ Open PowerShell from cmd and run the PowerShell installer:
 powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex"
 ```
 
+#### WSL2 (Windows Subsystem for Linux)
+
+Install from your WSL terminal using the bash installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+```
+
+The installer automatically detects WSL2 and provides WSL-specific guidance after
+completion. If Claude Desktop is installed on the Windows side, you may need to
+register the MCP server from a Windows terminal as well.
+
 ### Update existing installation
 
 Run the same install command to update:
@@ -179,6 +191,22 @@ Open Claude Code and say: index this codebase. No manual commands needed.
 
 Interact via chat inside Claude Code; no function calls or commands are required.
 
+### 4) CLI diagnostics (optional)
+
+A CLI tool is included for troubleshooting and setup guidance:
+
+```bash
+python scripts/cli.py help         # Show available commands
+python scripts/cli.py doctor       # Check installation health
+python scripts/cli.py setup-guide  # OS-specific setup instructions
+python scripts/cli.py status       # Show indexed projects
+python scripts/cli.py paths        # Show all paths used by the tool
+python scripts/cli.py version      # Print version info
+```
+
+The `doctor` command verifies your Python version, checks dependencies, validates
+storage directories, and detects WSL2/Windows environments.
+
 ## Architecture
 
 ```
@@ -201,6 +229,8 @@ claude-context-local/
 │   └── server.py                     # MCP tools for Claude Code (stdio/HTTP)
 └── scripts/
     ├── install.sh                    # One-liner remote installer (uv + model + faiss)
+    ├── install.ps1                   # PowerShell installer for Windows
+    ├── cli.py                        # CLI diagnostics and help tool
     ├── download_model_standalone.py  # Pre-fetch embedding model
     └── index_codebase.py             # Standalone indexing utility
 ```
@@ -424,6 +454,16 @@ Tips:
 
 ## Troubleshooting
 
+### Quick Diagnostics
+
+Run the built-in health checker to identify common issues:
+
+```bash
+python scripts/cli.py doctor
+```
+
+This checks Python version, dependencies, storage paths, model cache, and platform-specific concerns (WSL2, Windows path mismatches, etc.).
+
 ### Common Issues
 
 1. **Import errors**: Ensure all dependencies are installed with `uv sync`
@@ -433,6 +473,7 @@ Tips:
 5. **FAISS GPU not used**: Ensure `nvidia-smi` is available and CUDA drivers are installed; re-run installer to pick `faiss-gpu-cu12`/`cu11`.
 6. **Force offline**: We auto-detect a local cache and prefer offline loads; you can also set `HF_HUB_OFFLINE=1`.
 7. **401 / gated repo on Windows**: Run `hf auth whoami`. If that shows you are logged in but the installer still gets `401 Unauthorized`, set `HF_TOKEN` in the same shell where you run the installer and retry.
+8. **WSL2 path issues**: Run `python scripts/cli.py doctor` to check Windows interop. Hugging Face tokens cached in Windows may not be visible in WSL — set `HF_TOKEN` explicitly.
 
 ### Ignored directories (for speed and noise reduction)
 
