@@ -296,6 +296,7 @@ class TestMultiLanguageChunker:
 
         assert len(chunks) == 1
         assert chunks[0].chunk_type == "document"
+        assert "invalid: [" in chunks[0].content
         assert "raw" in chunks[0].tags
 
     def test_indexing_config_can_exclude_extensions(self, tmp_path):

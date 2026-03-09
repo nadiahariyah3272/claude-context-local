@@ -106,7 +106,12 @@ class MultiLanguageChunker:
             normalized = f'.{normalized}'
         return normalized
 
-    def _read_positive_int(self, env_value, config_value, default: Optional[int]) -> Optional[int]:
+    def _read_positive_int(
+        self,
+        env_value: Optional[str],
+        config_value: Optional[int | str],
+        default: Optional[int],
+    ) -> Optional[int]:
         """Read a positive integer from env/config; zero or blank disables the limit."""
         value = env_value if env_value not in (None, '') else config_value
         if value in (None, ''):
@@ -321,9 +326,11 @@ class MultiLanguageChunker:
         
         # Use provided extensions or all supported
         if extensions:
-            valid_extensions = {self._normalize_extension(ext) for ext in extensions}
-            valid_extensions.discard(None)
-            valid_extensions = valid_extensions & self.supported_extensions
+            valid_extensions = {
+                normalized
+                for ext in extensions
+                if (normalized := self._normalize_extension(ext)) is not None
+            } & self.supported_extensions
         else:
             valid_extensions = self.supported_extensions
         
