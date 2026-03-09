@@ -34,14 +34,6 @@ class KotlinChunker(LanguageChunker):
             return self.get_node_text(prev, source).strip()
         return None
 
-    def _extract_annotations(self, modifiers_node: Any, source: bytes) -> List[str]:
-        """Extract @Annotation names from a modifiers node."""
-        return [
-            self.get_node_text(child, source)
-            for child in modifiers_node.children
-            if child.type == 'annotation'
-        ]
-
     def _parse_modifiers(self, node: Any, source: bytes) -> Dict[str, Any]:
         """Parse the modifiers child of a node into annotations, class modifiers, and function modifiers."""
         result: Dict[str, Any] = {}

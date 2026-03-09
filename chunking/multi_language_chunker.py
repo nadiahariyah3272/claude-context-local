@@ -66,7 +66,7 @@ class MultiLanguageChunker:
             logger.debug(f"File type not supported: {file_path}")
             return []
 
-        # Use tree-sitter for all  languages 
+        # Use tree-sitter for all languages
         try:
             tree_chunks = self.tree_sitter_chunker.chunk_file(file_path)
             # Convert TreeSitterChunk to CodeChunk
@@ -155,13 +155,15 @@ class MultiLanguageChunker:
             if parent_name and chunk_type == 'function':
                 chunk_type = 'method'
             
-            # Build folder structure from file path
+            # Build folder structure and relative path from file path
             path = Path(file_path)
             folder_parts = []
+            relative_path_str = str(path)
             if self.root_path:
                 try:
                     rel_path = path.relative_to(self.root_path)
                     folder_parts = list(rel_path.parent.parts)
+                    relative_path_str = str(rel_path)
                 except ValueError:
                     folder_parts = [path.parent.name] if path.parent.name else []
             else:
@@ -188,7 +190,7 @@ class MultiLanguageChunker:
             # Create CodeChunk
             chunk = CodeChunk(
                 file_path=str(path),
-                relative_path=str(path.relative_to(self.root_path)) if self.root_path else str(path),
+                relative_path=relative_path_str,
                 folder_structure=folder_parts,
                 chunk_type=chunk_type,
                 content=tchunk.content,

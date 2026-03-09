@@ -134,7 +134,12 @@ class SentenceTransformerModel(EmbeddingModel):
                     return True
             for d in cache_root.glob('**/*'):
                 if d.is_dir() and model_key in d.name.lower():
-                    if (d / 'config_sentence_transformers.json').exists() or (d / 'README.md').exists():
+                    # Require a substantive model artifact, not just any README
+                    if (
+                        (d / 'config_sentence_transformers.json').exists()
+                        or (d / 'config.json').exists()
+                        or (d / 'tokenizer_config.json').exists()
+                    ):
                         return True
         except Exception:
             return False
