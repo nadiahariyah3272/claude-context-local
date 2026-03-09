@@ -8,7 +8,7 @@ set -euo pipefail
 REPO_URL="https://github.com/FarhanAliRaza/claude-context-local"
 PROJECT_DIR="${HOME}/.local/share/claude-context-local"
 STORAGE_DIR="${HOME}/.claude_code_search"
-MODEL_NAME="google/embeddinggemma-300m"
+MODEL_NAME="${CODE_SEARCH_MODEL:-google/embeddinggemma-300m}"
 
 print() { printf "%b\n" "$1"; }
 hr() { print "\n==================================================\n"; }
@@ -122,7 +122,14 @@ fi
 # 6) Download model to storage dir
 print "Downloading embedding model to ${STORAGE_DIR}"
 mkdir -p "${STORAGE_DIR}"
-(cd "${PROJECT_DIR}" && uv run scripts/download_model_standalone.py --storage-dir "${STORAGE_DIR}" --model "${MODEL_NAME}" -v)
+if ! (cd "${PROJECT_DIR}" && uv run scripts/download_model_standalone.py --storage-dir "${STORAGE_DIR}" --model "${MODEL_NAME}" -v); then
+  print "WARNING: Model download did not complete."
+  print "You can finish authentication later with:"
+  print "  hf auth login"
+  print "  hf auth whoami"
+  print "Or set HF_TOKEN/HUGGING_FACE_HUB_TOKEN in the same shell before retrying."
+  print "The install will continue, but indexing/search will need the model downloaded first."
+fi
 
 # Colors for better visibility
 RED='\033[0;31m'
@@ -181,5 +188,4 @@ else
   printf "%s\n" "• To update later, re-run this installer"
   printf "%s\n" "• Your embeddings will be stored in ${STORAGE_DIR}"
 fi
-
 

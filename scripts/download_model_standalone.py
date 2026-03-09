@@ -6,11 +6,18 @@ import sys
 import logging
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
     print("sentence-transformers not installed. Install with: uv add sentence-transformers")
     sys.exit(1)
+
+from embeddings.huggingface_auth import (
+    build_huggingface_auth_error,
+    configure_huggingface_auth,
+)
 
 
 def download_model(model_name: str = "google/embeddinggemma-300m", storage_dir: str = None):
@@ -25,6 +32,8 @@ def download_model(model_name: str = "google/embeddinggemma-300m", storage_dir: 
     
     print(f"Downloading model: {model_name}")
     print(f"Storage directory: {models_dir}")
+    if configure_huggingface_auth():
+        print("Detected Hugging Face credentials from your environment or local token cache.")
     
     try:
         # Download and cache the model
@@ -45,7 +54,7 @@ def download_model(model_name: str = "google/embeddinggemma-300m", storage_dir: 
         return True
         
     except Exception as e:
-        print(f"Error downloading model: {e}")
+        print(f"Error downloading model: {build_huggingface_auth_error(model_name, e)}")
         return False
 
 

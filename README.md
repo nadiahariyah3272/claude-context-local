@@ -68,6 +68,8 @@ Claude’s code context is powerful, but sending your code to the cloud costs to
 
 ### Install (one‑liner)
 
+#### macOS / Linux / Git Bash
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
 ```
@@ -78,12 +80,38 @@ If your system doesn't have `curl`, you can use `wget`:
 wget -qO- https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
 ```
 
+#### Windows PowerShell
+
+```powershell
+irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex
+```
+
+If PowerShell blocks script execution in your shell, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex"
+```
+
+#### Windows Command Prompt (`cmd.exe`)
+
+Open PowerShell from cmd and run the PowerShell installer:
+
+```bat
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex"
+```
+
 ### Update existing installation
 
 Run the same install command to update:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+```
+
+On Windows, re-run the PowerShell command instead:
+
+```powershell
+irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex
 ```
 
 The installer will:
@@ -96,11 +124,12 @@ The installer will:
 ### What the installer does
 
 - Installs `uv` if missing and creates a project venv
-- Clones/updates `claude-context-local` in `~/.local/share/claude-context-local`
+- Clones/updates `claude-context-local` in `~/.local/share/claude-context-local` on Unix-like shells or `%LOCALAPPDATA%\claude-context-local` on PowerShell
 - Installs Python dependencies with `uv sync`
 - Downloads the EmbeddingGemma model (~1.2–1.3 GB) if not already cached
 - Tries to install `faiss-gpu` if an NVIDIA GPU is detected (interactive mode only)
 - **Preserves all your indexed projects and embeddings** across updates
+- If model download auth is not ready yet, the installer now completes and tells you how to retry later
 
 ## Quick Start
 
@@ -108,6 +137,12 @@ The installer will:
 
 ```bash
 claude mcp add code-search --scope user -- uv run --directory ~/.local/share/claude-context-local python mcp_server/server.py
+```
+
+PowerShell example:
+
+```powershell
+claude mcp add code-search --scope user -- uv run --directory "$env:LOCALAPPDATA\claude-context-local" python mcp_server/server.py
 ```
 
 Then open Claude Code; the server will run in stdio mode inside the `uv` environment.
@@ -222,20 +257,57 @@ accepting terms and/or authentication to download.
 
 2. Authenticate one of the following ways:
 
-   - CLI (recommended):
+    - CLI (recommended):
 
-     ```bash
-     uv run huggingface-cli login
-     # Paste your token from https://huggingface.co/settings/tokens
-     ```
+      ```bash
+      hf auth login
+      hf auth whoami
+      # Paste your token from https://huggingface.co/settings/tokens
+      ```
 
-   - Environment variable:
-     ```bash
-     export HUGGING_FACE_HUB_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
-     ```
+      `huggingface-cli login` is the older command name. If `huggingface-cli` is missing but
+      `hf` works, prefer `hf auth login`.
+
+    - Environment variable:
+      ```bash
+      export HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
+      ```
+
+      PowerShell:
+      ```powershell
+      $env:HF_TOKEN="hf_XXXXXXXXXXXXXXXXXXXXXXXX"
+      ```
+
+      Command Prompt:
+      ```bat
+      set HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
+      ```
+
+      We also support `HUGGING_FACE_HUB_TOKEN` for compatibility.
+
+3. If you use Git Bash on Windows, remember that `hf auth login` done in PowerShell or cmd may
+   store the token under your Windows profile while Git Bash uses a different `HOME`. If that
+   happens, set `HF_TOKEN` explicitly in the same shell where you run the installer.
 
 After the first successful download, we cache the model under `~/.claude_code_search/models`
 and prefer offline loads for speed and reliability.
+
+#### Optional model override
+
+`google/embeddinggemma-300m` remains the default because it is the best-tested balance of speed,
+memory, and accuracy in this repo. If you want to experiment with a larger compatible
+EmbeddingGemma variant, set `CODE_SEARCH_MODEL` before installing or running the server:
+
+```bash
+export CODE_SEARCH_MODEL=google/embeddinggemma-<variant>
+```
+
+```powershell
+$env:CODE_SEARCH_MODEL="google/embeddinggemma-<variant>"
+```
+
+The code now accepts other `google/embeddinggemma-*` model names too, but larger variants are
+opt-in because they use more RAM/VRAM and have not been benchmarked in this fork yet.
 
 ### Supported Languages & Extensions
 
@@ -287,11 +359,12 @@ Tips:
 ### Common Issues
 
 1. **Import errors**: Ensure all dependencies are installed with `uv sync`
-2. **Model download fails**: Check internet connection and disk space
+2. **Model download fails**: Check internet connection, disk space, Hugging Face auth, and whether you accepted the model terms
 3. **Memory issues**: Reduce batch size in indexing script
 4. **No search results**: Verify the codebase was indexed successfully
 5. **FAISS GPU not used**: Ensure `nvidia-smi` is available and CUDA drivers are installed; re-run installer to pick `faiss-gpu-cu12`/`cu11`.
 6. **Force offline**: We auto-detect a local cache and prefer offline loads; you can also set `HF_HUB_OFFLINE=1`.
+7. **401 / gated repo on Windows**: Run `hf auth whoami`. If that shows you are logged in but the installer still gets `401 Unauthorized`, set `HF_TOKEN` in the same shell where you run the installer and retry.
 
 ### Ignored directories (for speed and noise reduction)
 
