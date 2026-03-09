@@ -210,12 +210,7 @@ class IntelligentSearcher:
     
     def _count_chunks_in_file(self, relative_path: str) -> int:
         """Count total chunks in a specific file."""
-        count = 0
-        stats = self.index_manager.get_stats()
-        
-        # This is a simplified implementation
-        # In a real scenario, you might want to maintain this as a separate index
-        return stats.get('files_indexed', 0)
+        return self.index_manager.get_file_chunk_count(relative_path)
     
     def _rank_results(
         self, 
@@ -229,7 +224,7 @@ class IntelligentSearcher:
             score = result.similarity_score
             
             # Detect if query looks like an entity/class name
-            query_tokens = self._normalize_to_tokens(original_query.lower())
+            query_tokens = self._normalize_to_tokens(original_query)
             is_entity_query = self._is_entity_like_query(original_query, query_tokens)
             has_class_keyword = 'class' in original_query.lower()
             
