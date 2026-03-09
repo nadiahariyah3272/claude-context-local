@@ -229,6 +229,45 @@ class TestMultiLanguageChunker:
         assert any(name in chunk_names for name in ["Calculator", "calculate_sum", "MathOperations", "Operation", "Point"])
         assert any(t in chunk_types for t in ["function", "struct", "trait", "enum", "impl", "macro"])
 
+        # impl blocks must be traversed so their methods get individual chunks
+        impl_method_chunks = [
+            c for c in chunks
+            if c.parent_name in {"Calculator", "Operation", "Point"}
+            and c.chunk_type in {"function", "method"}
+        ]
+        assert len(impl_method_chunks) > 0, (
+            "Expected methods inside Rust impl blocks to be individually indexed with parent_name set"
+        )
+
+    def test_chunk_java_interface_methods_have_parent_name(self, chunker, test_data_dir):
+        """Methods declared inside a Java interface should have parent_name set."""
+        file_path = test_data_dir / "Calculator.java"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        interface_method_chunks = [
+            c for c in chunks
+            if c.parent_name == "MathOperations"
+        ]
+        assert len(interface_method_chunks) > 0, (
+            "Expected method(s) inside Java interface MathOperations to have parent_name='MathOperations'"
+        )
+
+    def test_chunk_java_enum_methods_have_parent_name(self, chunker, test_data_dir):
+        """Methods declared inside a Java enum should have parent_name set."""
+        file_path = test_data_dir / "Calculator.java"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        enum_method_chunks = [
+            c for c in chunks
+            if c.parent_name == "Operation"
+            and c.chunk_type in {"function", "method"}
+        ]
+        assert len(enum_method_chunks) > 0, (
+            "Expected method(s) inside Java enum Operation to have parent_name='Operation'"
+        )
+
     def test_chunk_markdown_file(self, chunker, test_data_dir):
         """Test chunking Markdown file."""
         file_path = test_data_dir / "README.md"

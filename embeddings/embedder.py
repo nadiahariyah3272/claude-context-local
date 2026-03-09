@@ -12,6 +12,19 @@ from embeddings.model_catalog import DEFAULT_EMBEDDING_MODEL, EmbeddingModelConf
 from embeddings.sentence_transformer import SentenceTransformerModel
 from common_utils import get_storage_dir, load_local_install_config
 
+# Chunk types that represent members of a parent type (class, impl block,
+# interface, …).  Embedding content for these includes a parent-context
+# prefix so queries like "Calculator.add" can find the method even though
+# the method body does not mention the parent class name.
+_MEMBER_CHUNK_TYPES: frozenset[str] = frozenset({
+    'method',
+    'constructor',
+    'property',
+    'init',
+    'destructor',
+    'event',
+})
+
 
 @dataclass
 class EmbeddingResult:
@@ -109,6 +122,12 @@ class CodeEmbedder:
         """
         content_parts = []
 
+        # For methods and constructors, prepend parent context so queries
+        # like "Calculator.add" or "methods in Calculator" can find them
+        # even though the method body doesn't contain the class name.
+        if chunk.parent_name and chunk.chunk_type in _MEMBER_CHUNK_TYPES:
+            content_parts.append(f"# In {chunk.parent_name}:")
+
         # Add docstring if available
         docstring_budget = 300
         if chunk.docstring:
@@ -153,6 +172,36 @@ class CodeEmbedder:
 
         return '\n'.join(content_parts)
 
+    @staticmethod
+    def _make_chunk_id(chunk: CodeChunk) -> str:
+        """Build a stable, unique identifier for a code chunk."""
+        chunk_id = f"{chunk.relative_path}:{chunk.start_line}-{chunk.end_line}:{chunk.chunk_type}"
+        if chunk.name:
+            chunk_id += f":{chunk.name}"
+        return chunk_id
+
+    @staticmethod
+    def _make_chunk_metadata(chunk: CodeChunk) -> Dict[str, Any]:
+        """Build the metadata dict stored alongside a chunk's FAISS vector."""
+        return {
+            'file_path': chunk.file_path,
+            'relative_path': chunk.relative_path,
+            'folder_structure': chunk.folder_structure,
+            'chunk_type': chunk.chunk_type,
+            'start_line': chunk.start_line,
+            'end_line': chunk.end_line,
+            'name': chunk.name,
+            'parent_name': chunk.parent_name,
+            'docstring': chunk.docstring,
+            'decorators': chunk.decorators,
+            'imports': chunk.imports,
+            'complexity_score': chunk.complexity_score,
+            'tags': chunk.tags,
+            'content_preview': (
+                chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content
+            ),
+        }
+
     def embed_chunk(self, chunk: CodeChunk) -> EmbeddingResult:
         """Generate embedding for a single code chunk.
 
@@ -172,33 +221,10 @@ class CodeEmbedder:
             show_progress_bar=False,
         )[0]
 
-        # Create chunk ID
-        chunk_id = f"{chunk.relative_path}:{chunk.start_line}-{chunk.end_line}:{chunk.chunk_type}"
-        if chunk.name:
-            chunk_id += f":{chunk.name}"
-
-        # Prepare metadata
-        metadata = {
-            'file_path': chunk.file_path,
-            'relative_path': chunk.relative_path,
-            'folder_structure': chunk.folder_structure,
-            'chunk_type': chunk.chunk_type,
-            'start_line': chunk.start_line,
-            'end_line': chunk.end_line,
-            'name': chunk.name,
-            'parent_name': chunk.parent_name,
-            'docstring': chunk.docstring,
-            'decorators': chunk.decorators,
-            'imports': chunk.imports,
-            'complexity_score': chunk.complexity_score,
-            'tags': chunk.tags,
-            'content_preview': chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content
-        }
-
         return EmbeddingResult(
             embedding=embedding,
-            chunk_id=chunk_id,
-            metadata=metadata
+            chunk_id=self._make_chunk_id(chunk),
+            metadata=self._make_chunk_metadata(chunk),
         )
 
     def embed_chunks(self, chunks: List[CodeChunk], batch_size: int = 32) -> List[EmbeddingResult]:
@@ -230,31 +256,10 @@ class CodeEmbedder:
 
             # Create results
             for chunk, embedding in zip(batch, batch_embeddings):
-                chunk_id = f"{chunk.relative_path}:{chunk.start_line}-{chunk.end_line}:{chunk.chunk_type}"
-                if chunk.name:
-                    chunk_id += f":{chunk.name}"
-
-                metadata = {
-                    'file_path': chunk.file_path,
-                    'relative_path': chunk.relative_path,
-                    'folder_structure': chunk.folder_structure,
-                    'chunk_type': chunk.chunk_type,
-                    'start_line': chunk.start_line,
-                    'end_line': chunk.end_line,
-                    'name': chunk.name,
-                    'parent_name': chunk.parent_name,
-                    'docstring': chunk.docstring,
-                    'decorators': chunk.decorators,
-                    'imports': chunk.imports,
-                    'complexity_score': chunk.complexity_score,
-                    'tags': chunk.tags,
-                    'content_preview': chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content
-                }
-
                 results.append(EmbeddingResult(
                     embedding=embedding,
-                    chunk_id=chunk_id,
-                    metadata=metadata
+                    chunk_id=self._make_chunk_id(chunk),
+                    metadata=self._make_chunk_metadata(chunk),
                 ))
 
             if i + batch_size < len(chunks):

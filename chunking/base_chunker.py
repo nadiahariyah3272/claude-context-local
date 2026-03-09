@@ -37,6 +37,28 @@ class TreeSitterChunk:
         }
 
 
+
+# Node types that act as containers whose children should also be traversed
+# for individual sub-chunks (methods, nested functions, etc.).  Extending
+# this set is the primary way to add cross-language container support.
+_CONTAINER_NODE_TYPES: frozenset[str] = frozenset({
+    # Class-like containers (all languages)
+    'class_definition',       # Python
+    'class_declaration',      # Java, C#, C++
+    'object_declaration',     # Kotlin (singleton)
+    'companion_object',       # Kotlin companion object
+    # Interface & enum containers (members can have methods)
+    'interface_declaration',  # Java, C#, Go
+    'enum_declaration',       # Java, C# (Java enums may contain methods)
+    'struct_declaration',     # C#, Go
+    # Rust-specific containers
+    'impl_item',              # impl blocks with associated functions/methods
+    'trait_item',             # trait definitions with method signatures/defaults
+    # C# namespaces (can contain nested types with their own methods)
+    'namespace_declaration',
+})
+
+
 class LanguageChunker(ABC):
     """Abstract base class for language-specific chunkers."""
 
@@ -145,9 +167,10 @@ class LanguageChunker(ABC):
                 )
                 chunks.append(chunk)
 
-                # For class/object-like containers, continue traversing to find nested members
-                # For other chunked nodes, stop traversal
-                if node.type in ['class_definition', 'class_declaration', 'object_declaration', 'companion_object']:
+                # For container nodes, continue traversing to find nested members.
+                # _CONTAINER_NODE_TYPES covers classes, interfaces, enums,
+                # Rust impl/trait blocks, and C# namespaces.
+                if node.type in _CONTAINER_NODE_TYPES:
                     parent_type = metadata.get('declaration_kind', 'class')
                     container_info = {
                         'parent_name': metadata.get('name'),
