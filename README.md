@@ -349,6 +349,32 @@ If you want to evaluate Unsloth-hosted embedding candidates instead, start with 
 
 - https://huggingface.co/collections/unsloth/embedding-models
 
+#### Fine-tuning with Unsloth
+
+If your repositories are highly domain-specific, fine-tuning an embedding model can improve retrieval quality more than swapping between off-the-shelf checkpoints.
+
+Unsloth now supports fine-tuning SentenceTransformer-compatible embedding models such as:
+
+- `google/embeddinggemma-300m`
+- `Qwen/Qwen3-Embedding-0.6B`
+- `BAAI/bge-m3`
+- `sentence-transformers/all-MiniLM-L6-v2`
+- `sentence-transformers/all-mpnet-base-v2`
+
+Useful references:
+
+- Unsloth embedding collection: https://huggingface.co/collections/unsloth/embedding-models
+- Unsloth notebooks: EmbeddingGemma, Qwen3-Embedding, BGE M3, ModernBERT, and All-MiniLM-L6-v2
+
+For this repo, the practical workflow is:
+
+1. Fine-tune and export a merged SentenceTransformer-compatible model with Unsloth.
+2. Publish it to Hugging Face or keep it as a local folder.
+3. Point the installer at that model with `CODE_SEARCH_MODEL=<your-model>` before re-running install.
+4. If you need custom query/document prefixes, store them in `install_config.json` alongside the model name.
+
+That keeps the retrieval stack unchanged while still letting you move to a domain-tuned embedding model later.
+
 ### Supported Languages & Extensions
 
 **Fully Supported (18 extensions across 12 languages/content types):**

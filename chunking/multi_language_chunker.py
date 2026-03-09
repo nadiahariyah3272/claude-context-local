@@ -140,6 +140,8 @@ class MultiLanguageChunker:
             
             chunk_type = chunk_type_map.get(tchunk.node_type, tchunk.node_type)
             declaration_kind = tchunk.metadata.get('declaration_kind')
+            # Some grammars reuse a broad node type (for example Kotlin class_declaration)
+            # and expose the more specific kind in metadata instead.
             if declaration_kind in {'interface', 'enum', 'object', 'property'}:
                 chunk_type = declaration_kind
             

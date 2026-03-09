@@ -2,7 +2,7 @@
 
 import logging
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 import os
 import numpy as np
 
@@ -39,13 +39,12 @@ def _resolve_model_config(model_name: Optional[str]) -> EmbeddingModelConfig:
     if isinstance(configured_model, dict):
         selected_model_name = configured_model.get("model_name", DEFAULT_EMBEDDING_MODEL)
         config = get_model_config(selected_model_name)
-        return replace(
-            config,
-            document_prompt_name=configured_model.get("document_prompt_name", config.document_prompt_name),
-            query_prompt_name=configured_model.get("query_prompt_name", config.query_prompt_name),
-            document_prefix=configured_model.get("document_prefix", config.document_prefix),
-            query_prefix=configured_model.get("query_prefix", config.query_prefix),
-        )
+        overrides = {
+            field.name: configured_model[field.name]
+            for field in fields(EmbeddingModelConfig)
+            if field.name != "model_name" and field.name in configured_model
+        }
+        return replace(config, **overrides)
 
     return get_model_config(DEFAULT_EMBEDDING_MODEL)
 
