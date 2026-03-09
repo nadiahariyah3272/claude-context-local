@@ -262,8 +262,8 @@ def cmd_doctor() -> None:
         try:
             __import__(import_name)
             print(f"  {green('✓')} {pkg_name} importable")
-        except ImportError:
-            msg = f"{pkg_name} not importable – run 'uv sync' to install dependencies"
+        except Exception as exc:
+            msg = f"{pkg_name} not importable ({type(exc).__name__}) – run 'uv sync' to install dependencies"
             print(f"  {red('✗')} {msg}")
             issues.append(msg)
 

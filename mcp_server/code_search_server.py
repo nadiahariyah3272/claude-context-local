@@ -166,10 +166,16 @@ class CodeSearchServer:
         """Implementation of search_code tool."""
         try:
             if not query or not query.strip():
-                return json.dumps({"error": "Search query must not be empty. Provide a natural language description of the code you are looking for."})
+                return json.dumps({
+                    "error": "Search query must not be empty.",
+                    "suggestion": "Provide a natural language description of the code you are looking for, e.g. search_code('authentication logic')."
+                })
 
             if k < 1 or k > 100:
-                return json.dumps({"error": f"k must be between 1 and 100 (got {k})."})
+                return json.dumps({
+                    "error": f"k must be between 1 and 100 (got {k}).",
+                    "suggestion": "Use a smaller value for k, e.g. search_code('query', k=10)."
+                })
 
             logger.info(f"🔍 MCP REQUEST: search_code(query='{query}', k={k}, mode='{search_mode}', file_pattern={file_pattern}, chunk_type={chunk_type})")
 

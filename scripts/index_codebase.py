@@ -116,8 +116,8 @@ def main():
         chunks = chunker.chunk_directory()
         
         if not chunks:
-            logger.error("No supported source files found or no chunks extracted.")
-            logger.error("Supported extensions: .py, .js, .jsx, .ts, .tsx, .java, .kt, .kts, .go, .rs, .c, .cpp, .cs, .md, .svelte")
+            supported = ", ".join(sorted(chunker.SUPPORTED_EXTENSIONS))
+            logger.error(f"No supported source files found or no chunks extracted. Supported extensions: {supported}")
             sys.exit(1)
         
         logger.info(f"Generated {len(chunks)} chunks from source files")

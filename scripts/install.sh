@@ -15,7 +15,7 @@ hr() { print "\n==================================================\n"; }
 
 # Detect WSL environment
 IS_WSL=0
-if [[ -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+if [[ -f /proc/version ]] && grep -Eiq "microsoft|wsl" /proc/version 2>/dev/null; then
   IS_WSL=1
 fi
 
