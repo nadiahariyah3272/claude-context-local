@@ -420,7 +420,7 @@ class TestFullSearchFlow:
         )
         assert matched_result.context_info['file_context']['total_chunks_in_file'] == expected_count
 
-    def test_filtered_search_expands_candidate_pool_without_oversearching_unfiltered_queries(self, mock_storage_dir):
+    def test_filtered_search_optimizes_candidate_pool(self, mock_storage_dir):
         """Filtered searches should inspect a larger candidate pool, while unfiltered searches should stay tight."""
         index_manager = CodeIndexManager(str(mock_storage_dir))
         index_manager._index = _FakeFaissIndex(ntotal=60)

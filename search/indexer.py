@@ -190,7 +190,7 @@ class CodeIndexManager:
         
         # Search in FAISS index
         search_multiplier = 10 if filters else 1
-        search_k = min(max(k, k * search_multiplier), index.ntotal)
+        search_k = min(k * search_multiplier, index.ntotal)
         similarities, indices = index.search(query_embedding, search_k)
         
         results = []
