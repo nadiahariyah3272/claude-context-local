@@ -297,3 +297,42 @@ class TestMultiLanguageChunker:
         assert len(chunks) == 1
         assert chunks[0].chunk_type == "document"
         assert "raw" in chunks[0].tags
+
+    def test_indexing_config_can_exclude_extensions(self, tmp_path):
+        """Project config should make it easy to exclude noisy file types."""
+        (tmp_path / ".claude-context-local.json").write_text(
+            '{"exclude_extensions": [".toml"]}',
+            encoding="utf-8",
+        )
+        (tmp_path / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+        (tmp_path / "settings.toml").write_text("[server]\nport = 43594\n", encoding="utf-8")
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+        chunks = chunker.chunk_directory(str(tmp_path))
+
+        assert chunker.is_supported("main.py")
+        assert not chunker.is_supported("settings.toml")
+        assert all(not chunk.file_path.endswith(".toml") for chunk in chunks)
+
+    def test_large_structured_files_can_be_skipped_by_config(self, tmp_path):
+        """Structured file limits should prevent huge config files from muddying the index."""
+        (tmp_path / ".claude-context-local.json").write_text(
+            '{"max_structured_file_lines": 3}',
+            encoding="utf-8",
+        )
+        (tmp_path / "large.toml").write_text(
+            "\n".join(
+                [
+                    "[server]",
+                    "port = 43594",
+                    "host = \"127.0.0.1\"",
+                    "[database]",
+                    "url = \"sqlite:///game.db\"",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+
+        assert chunker.chunk_file(str(tmp_path / "large.toml")) == []

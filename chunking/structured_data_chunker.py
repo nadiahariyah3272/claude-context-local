@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 import tomllib
 from pathlib import Path
 from typing import Any, List, Optional
@@ -25,8 +24,15 @@ STRUCTURED_DATA_EXTENSION_MAP = {
 class StructuredDataChunker:
     """Chunk YAML, TOML, and JSON files into semantic config sections."""
 
-    def __init__(self, root_path: Optional[str] = None):
+    def __init__(
+        self,
+        root_path: Optional[str] = None,
+        max_file_lines: Optional[int] = None,
+        max_file_bytes: Optional[int] = None,
+    ):
         self.root_path = root_path
+        self.max_file_lines = max_file_lines
+        self.max_file_bytes = max_file_bytes
 
     def is_supported(self, file_path: str) -> bool:
         """Check whether the file extension is supported."""
@@ -39,6 +45,22 @@ class StructuredDataChunker:
         if not language:
             return []
 
+        if self.max_file_bytes is not None:
+            try:
+                file_size = path.stat().st_size
+            except OSError as exc:
+                logger.error(f"Failed to inspect structured data file {file_path}: {exc}")
+                return []
+
+            if file_size > self.max_file_bytes:
+                logger.info(
+                    "Skipping structured data file %s (%s bytes exceeds limit %s bytes)",
+                    file_path,
+                    file_size,
+                    self.max_file_bytes,
+                )
+                return []
+
         try:
             source_text = path.read_text(encoding='utf-8')
         except OSError as exc:
@@ -47,6 +69,17 @@ class StructuredDataChunker:
 
         if not source_text.strip():
             return []
+
+        if self.max_file_lines is not None:
+            line_count = len(source_text.splitlines())
+            if line_count > self.max_file_lines:
+                logger.info(
+                    "Skipping structured data file %s (%s lines exceeds limit %s lines)",
+                    file_path,
+                    line_count,
+                    self.max_file_lines,
+                )
+                return []
 
         try:
             documents = self._parse_source(source_text, language)
@@ -266,25 +299,21 @@ class StructuredDataChunker:
         if not token:
             return 1
 
-        patterns = {
-            'yaml': re.compile(rf'(^|\s){re.escape(token)}\s*:'),
-            'json': re.compile(rf'"{re.escape(token)}"\s*:'),
-            'toml': re.compile(rf'(^|\s){re.escape(token)}\s*=|\[[^\]]*{re.escape(token)}[^\]]*\]'),
-        }
-        pattern = patterns.get(language)
-        if not pattern:
-            return 1
-
         for line_number, line in enumerate(source_text.splitlines(), start=1):
-            if pattern.search(line):
+            stripped = line.strip()
+            if language == 'yaml' and (stripped.startswith(f'{token}:') or f' {token}:' in line):
+                return line_number
+            if language == 'json' and f'"{token}"' in line:
+                return line_number
+            if language == 'toml' and (f'{token} =' in stripped or (stripped.startswith('[') and token in stripped)):
                 return line_number
         return 1
 
     def _render_fragment(self, language: str, name: str, value: Any) -> str:
         """Render a chunk in a search-friendly, normalized text form."""
         if language == 'yaml':
-            rendered_value = yaml.safe_dump(value, sort_keys=True, allow_unicode=True).strip()
+            rendered_value = yaml.safe_dump(value, sort_keys=False, allow_unicode=True).strip()
         else:
-            rendered_value = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True)
+            rendered_value = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=False)
 
         return f"Path: {name}\nFormat: {language}\n{rendered_value}".strip()

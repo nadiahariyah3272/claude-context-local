@@ -94,6 +94,17 @@ class TestCLICommands:
         assert "status could not access the storage directory" in out
         assert "CODE_SEARCH_STORAGE" in out
 
+    def test_status_returns_before_project_lookup_when_storage_missing(self, capsys):
+        """status should stop immediately when storage resolution fails."""
+        with patch("scripts.cli._get_storage_dir_or_report", return_value=None) as helper:
+            with patch("pathlib.Path.is_dir", side_effect=AssertionError("should not inspect directories")):
+                with patch("pathlib.Path.iterdir", side_effect=AssertionError("should not enumerate directories")):
+                    cmd_status()
+
+        out = capsys.readouterr().out
+        helper.assert_called_once_with("status")
+        assert "Index Status" in out
+
     def test_unknown_command_exits_with_error(self):
         """An unknown command should exit with code 1."""
         result = subprocess.run(

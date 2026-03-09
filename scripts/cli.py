@@ -190,6 +190,7 @@ def cmd_paths() -> None:
 
     if storage is None:
         print(f"  {yellow('—')} Install directory:       {install_dir}")
+        print(f"  {yellow('—')} Storage-dependent paths are unavailable until {cyan('CODE_SEARCH_STORAGE')} points to a writable location.")
         print(f"\n{bold('Claude config locations (checked in order):')}")
         for p in get_claude_config_paths():
             marker = green("✓") if p.is_file() else yellow("—")

@@ -293,6 +293,30 @@ The system uses advanced parsing to create semantically meaningful chunks across
 
 - `CODE_SEARCH_STORAGE`: Custom storage directory (default: `~/.claude_code_search`)
 
+### Indexing Controls
+
+If a repository contains very large or low-signal structured files, configure indexing with a project-local `.claude-context-local.json` file:
+
+```json
+{
+  "exclude_extensions": [".toml"],
+  "max_structured_file_lines": 50000,
+  "max_structured_file_bytes": 5000000
+}
+```
+
+- `exclude_extensions`: Skip specific file types entirely, such as `.toml` for large generated configs.
+- `max_structured_file_lines`: Skip oversized YAML/TOML/JSON files before chunking.
+- `max_structured_file_bytes`: Skip oversized YAML/TOML/JSON files by byte size.
+
+Environment variables can override these settings for one-off runs:
+
+- `CODE_SEARCH_EXCLUDE_EXTENSIONS=.toml,.json`
+- `CODE_SEARCH_MAX_STRUCTURED_FILE_LINES=75000`
+- `CODE_SEARCH_MAX_STRUCTURED_FILE_BYTES=8000000`
+
+When these indexing controls change, incremental/MCP indexing automatically performs a full rebuild so stale chunks from newly excluded file types are removed. The standalone `scripts/index_codebase.py` command also clears the previous index automatically when the indexing configuration changes.
+
 ### Model Configuration
 
 The system still defaults to `google/embeddinggemma-300m`, but the selected model is now persisted with the local installation so you can switch models by re-running the installer.

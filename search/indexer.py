@@ -35,6 +35,7 @@ class CodeIndexManager:
         self._on_gpu = False
         self._stats_cache = None
         self._file_chunk_counts = {}
+        self._indexing_config = {}
         
     @property
     def index(self):
@@ -137,6 +138,11 @@ class CodeIndexManager:
         
         # Update statistics
         self._update_stats()
+
+    def set_indexing_config(self, indexing_config: Optional[Dict[str, Any]]) -> None:
+        """Persist indexing configuration in saved stats for cache invalidation."""
+        self._indexing_config = dict(indexing_config or {})
+        self._stats_cache = None
 
     def _gpu_is_available(self) -> bool:
         """Check if GPU FAISS support is available and GPUs are present."""
@@ -359,7 +365,8 @@ class CodeIndexManager:
             'total_chunks': len(self._chunk_ids),
             'index_size': self._index.ntotal if self._index else 0,
             'embedding_dimension': self._index.d if self._index else 0,
-            'index_type': type(self._index).__name__ if self._index else 'None'
+            'index_type': type(self._index).__name__ if self._index else 'None',
+            'indexing_config': self._indexing_config,
         }
         
         # Add file and folder statistics
@@ -414,13 +421,15 @@ class CodeIndexManager:
                 stats = json.load(f)
             self._stats_cache = stats
             self._file_chunk_counts = stats.get('file_chunk_counts', {})
+            self._indexing_config = stats.get('indexing_config', {})
             return stats
         else:
             stats = {
                 'total_chunks': 0,
                 'index_size': 0,
                 'embedding_dimension': 0,
-                'files_indexed': 0
+                'files_indexed': 0,
+                'indexing_config': self._indexing_config,
             }
             self._stats_cache = stats
             self._file_chunk_counts = {}
@@ -447,6 +456,7 @@ class CodeIndexManager:
         self._chunk_ids = []
         self._stats_cache = None
         self._file_chunk_counts = {}
+        self._indexing_config = {}
         
         self._logger.info("Index cleared")
     
