@@ -337,3 +337,30 @@ class TestMultiLanguageChunker:
         chunker = MultiLanguageChunker(str(tmp_path))
 
         assert chunker.chunk_file(str(tmp_path / "large.toml")) == []
+
+    def test_toml_with_datetime_values(self, tmp_path):
+        """TOML files containing datetime values should be indexed without crashing."""
+        file_path = tmp_path / "build.toml"
+        file_path.write_text(
+            "[build]\ndate = 2024-01-01\ntimestamp = 2024-01-01T12:00:00Z\n",
+            encoding="utf-8",
+        )
+
+        chunker = MultiLanguageChunker(str(tmp_path))
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        all_content = " ".join(c.content for c in chunks)
+        assert "2024-01-01" in all_content
+
+    def test_invalid_non_dict_config_file_is_ignored(self, tmp_path):
+        """A .claude-context-local.json that is not a JSON object should be skipped gracefully."""
+        (tmp_path / ".claude-context-local.json").write_text(
+            '["just", "a", "list"]', encoding="utf-8"
+        )
+        (tmp_path / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+
+        # Should not raise; indexing config should fall back to defaults
+        chunker = MultiLanguageChunker(str(tmp_path))
+        assert chunker.excluded_extensions == set()
+        assert chunker.is_supported("main.py")

@@ -314,6 +314,8 @@ class StructuredDataChunker:
         if language == 'yaml':
             rendered_value = yaml.safe_dump(value, sort_keys=False, allow_unicode=True).strip()
         else:
-            rendered_value = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=False)
+            # TOML values may include datetime/date/time objects (which tomllib parses natively).
+            # Provide a str fallback so they round-trip safely without crashing serialization.
+            rendered_value = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=False, default=str)
 
         return f"Path: {name}\nFormat: {language}\n{rendered_value}".strip()

@@ -123,7 +123,7 @@ def main():
         
         # Chunk the codebase
         logger.info("Parsing and chunking source files...")
-        chunks = chunker.chunk_directory()
+        chunks = chunker.chunk_directory(str(directory_path))
         
         if not chunks:
             supported = ", ".join(sorted(chunker.supported_extensions))

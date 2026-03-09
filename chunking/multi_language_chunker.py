@@ -63,7 +63,15 @@ class MultiLanguageChunker:
             config_path = Path(self.root_path) / self.CONFIG_FILE_NAME
             if config_path.is_file():
                 try:
-                    config = json.loads(config_path.read_text(encoding='utf-8'))
+                    loaded = json.loads(config_path.read_text(encoding='utf-8'))
+                    if isinstance(loaded, dict):
+                        config = loaded
+                    else:
+                        logger.warning(
+                            "Ignoring %s: expected a JSON object but got %s",
+                            config_path,
+                            type(loaded).__name__,
+                        )
                 except (OSError, json.JSONDecodeError) as exc:
                     logger.warning(f"Failed to load indexing config from {config_path}: {exc}")
 
