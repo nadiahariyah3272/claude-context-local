@@ -108,15 +108,13 @@ class IntelligentSearcher:
         # Generate query embedding
         query_embedding = self.embedder.embed_query(optimized_query)
         
-        # Search with expanded result set for better filtering and recall
-        search_k = min(k * 10, 200)  # Increased from k*3 to k*10 for better recall
         self._logger.info(f"Query embedding shape: {query_embedding.shape if hasattr(query_embedding, 'shape') else 'unknown'}")
         self._logger.info(f"Using original filters: {filters}")
-        self._logger.info(f"Calling index_manager.search with k={search_k}")
+        self._logger.info(f"Calling index_manager.search with k={k}")
         
         raw_results = self.index_manager.search(
             query_embedding, 
-            search_k, 
+            k,
             filters
         )
         self._logger.info(f"Index manager returned {len(raw_results)} raw results")

@@ -31,6 +31,17 @@ class _FakeFaissIndex:
         return similarities, indices
 
 
+class _StubIndexManager:
+    """Minimal index manager stub for searcher-level sizing tests."""
+
+    def __init__(self):
+        self.calls = []
+
+    def search(self, query_embedding, k, filters=None):
+        self.calls.append({"k": k, "filters": filters})
+        return []
+
+
 class TestFullSearchFlow:
     """Integration tests using real Python project files."""
     
@@ -453,6 +464,22 @@ class TestFullSearchFlow:
         unfiltered_results = index_manager.search(query_embedding, k=5)
         assert len(unfiltered_results) == 5
         assert index_manager._index.requested_ks == [50, 5]
+
+    def test_searcher_passes_requested_k_without_double_expansion(self):
+        """Searcher should delegate candidate-pool sizing to the index manager."""
+        index_manager = _StubIndexManager()
+
+        class TestEmbedder:
+            def embed_query(self, query):
+                return np.random.RandomState(abs(hash(query)) % 10000).random(768).astype(np.float32)
+
+        searcher = IntelligentSearcher(index_manager, TestEmbedder())
+        results = searcher.search("UserHandler", k=7, filters={"chunk_type": "class"})
+
+        assert results == []
+        assert index_manager.calls == [
+            {"k": 7, "filters": {"chunk_type": "class"}}
+        ]
 
     def test_rank_results_handles_camel_case_entity_queries(self, mock_storage_dir):
         """CamelCase entity queries should still receive name-based ranking boosts."""
