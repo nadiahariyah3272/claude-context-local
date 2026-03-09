@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone model download script that doesn't depend on our modules."""
+"""Standalone model download script that bootstraps repo imports for auth helpers."""
 
 import os
 import sys

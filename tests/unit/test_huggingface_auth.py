@@ -96,3 +96,21 @@ def test_code_embedder_rejects_unknown_non_gemma_models(tmp_path):
             cache_dir=str(tmp_path),
             device="cpu",
         )
+
+
+def test_code_embedder_rejects_non_google_embeddinggemma_models(tmp_path):
+    with pytest.raises(ValueError, match="Unsupported embedding model"):
+        CodeEmbedder(
+            model_name="someone/embeddinggemma-custom",
+            cache_dir=str(tmp_path),
+            device="cpu",
+        )
+
+
+def test_code_embedder_rejects_mixed_case_embeddinggemma_prefix(tmp_path):
+    with pytest.raises(ValueError, match="Unsupported embedding model"):
+        CodeEmbedder(
+            model_name="Google/embeddinggemma-custom",
+            cache_dir=str(tmp_path),
+            device="cpu",
+        )

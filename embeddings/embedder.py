@@ -45,7 +45,7 @@ class CodeEmbedder:
         model_class = AVAILIABLE_MODELS.get(model_name)
         if model_class:
             self._model = model_class(cache_dir=cache_dir, device=device)
-        elif "embeddinggemma" in model_name.lower():
+        elif model_name.startswith("google/embeddinggemma-"):
             self._model = SentenceTransformerModel(
                 model_name=model_name,
                 cache_dir=cache_dir,
