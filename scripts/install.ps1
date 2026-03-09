@@ -175,3 +175,6 @@ else {
 Write-Host "2) Verify connection: claude mcp list"
 Write-Host "3) In Claude Code: index this codebase"
 Write-Host "4) To switch embedding models later, set CODE_SEARCH_MODEL and re-run this installer"
+Write-Host ""
+Write-Host "Diagnostics: uv run --directory `"$ProjectDir`" python scripts/cli.py doctor"
+Write-Host "Setup guide: uv run --directory `"$ProjectDir`" python scripts/cli.py setup-guide"

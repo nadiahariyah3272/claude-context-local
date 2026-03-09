@@ -51,7 +51,7 @@ python -m pytest tests/unit/test_chunking.py -v  # Single test file
 ### Indexing & Usage
 
 ```bash
-# Index a Python codebase
+# Index a codebase (supports 18 file extensions)
 ./scripts/index_codebase.py /path/to/project
 
 # Index with custom storage location
@@ -62,6 +62,25 @@ python -m pytest tests/unit/test_chunking.py -v  # Single test file
 
 # Enable verbose logging
 ./scripts/index_codebase.py /path/to/project --verbose
+```
+
+### CLI Diagnostics
+
+```bash
+# Show available commands
+python scripts/cli.py help
+
+# Check installation health
+python scripts/cli.py doctor
+
+# OS-specific setup instructions
+python scripts/cli.py setup-guide
+
+# Show indexed projects
+python scripts/cli.py status
+
+# Show all paths
+python scripts/cli.py paths
 ```
 
 ### MCP Server

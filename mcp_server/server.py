@@ -7,6 +7,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import logging
 
+from common_utils import VERSION
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -24,7 +26,24 @@ def main():
     """Main entry point for the server."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Code Search MCP Server")
+    parser = argparse.ArgumentParser(
+        description="Code Search MCP Server – local semantic code search for Claude Code.",
+        epilog=(
+            "Examples:\n"
+            "  %(prog)s                    # Start with default stdio transport\n"
+            "  %(prog)s --transport sse    # Start with Server-Sent Events transport\n"
+            "  %(prog)s --version          # Show version and exit\n"
+            "\n"
+            "Register with Claude Code:\n"
+            "  claude mcp add code-search --scope user -- uv run --directory <install-dir> python mcp_server/server.py\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"claude-context-local {VERSION}",
+    )
     parser.add_argument(
         "--transport",
         choices=["stdio", "sse", "http"],
@@ -44,6 +63,8 @@ def main():
     )
 
     args = parser.parse_args()
+
+    logger.info("Starting Code Search MCP Server v%s (transport=%s)", VERSION, args.transport)
 
     # Create and run server
     server = CodeSearchServer()

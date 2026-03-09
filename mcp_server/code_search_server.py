@@ -165,6 +165,18 @@ class CodeSearchServer:
     ) -> str:
         """Implementation of search_code tool."""
         try:
+            if not query or not query.strip():
+                return json.dumps({
+                    "error": "Search query must not be empty.",
+                    "suggestion": "Provide a natural language description of the code you are looking for, e.g. search_code('authentication logic')."
+                })
+
+            if k < 1 or k > 100:
+                return json.dumps({
+                    "error": f"k must be between 1 and 100 (got {k}).",
+                    "suggestion": "Use a smaller value for k, e.g. search_code('query', k=10)."
+                })
+
             logger.info(f"🔍 MCP REQUEST: search_code(query='{query}', k={k}, mode='{search_mode}', file_pattern={file_pattern}, chunk_type={chunk_type})")
 
             if auto_reindex and self._current_project:
@@ -251,7 +263,8 @@ class CodeSearchServer:
         except Exception as e:
             error_msg = f"Search failed: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            return json.dumps({"error": error_msg})
+            suggestion = "Ensure the project is indexed (use index_directory) and the embedding model is loaded."
+            return json.dumps({"error": error_msg, "suggestion": suggestion})
 
     def index_directory(
         self,
@@ -268,10 +281,16 @@ class CodeSearchServer:
 
             directory_path = Path(directory_path).resolve()
             if not directory_path.exists():
-                return json.dumps({"error": f"Directory does not exist: {directory_path}"})
+                return json.dumps({
+                    "error": f"Directory does not exist: {directory_path}",
+                    "suggestion": "Check the path and ensure it is accessible. On Windows, use forward slashes or raw strings."
+                })
 
             if not directory_path.is_dir():
-                return json.dumps({"error": f"Path is not a directory: {directory_path}"})
+                return json.dumps({
+                    "error": f"Path is not a directory: {directory_path}",
+                    "suggestion": "Provide a path to a directory, not a file."
+                })
 
             project_name = project_name or directory_path.name
             logger.info(f"Indexing directory: {directory_path} (incremental={incremental})")
@@ -316,7 +335,8 @@ class CodeSearchServer:
         except Exception as e:
             error_msg = f"Indexing failed: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            return json.dumps({"error": error_msg})
+            suggestion = "Check that the directory is readable, dependencies are installed (uv sync), and the embedding model is available."
+            return json.dumps({"error": error_msg, "suggestion": suggestion})
 
     def find_similar_code(self, chunk_id: str, k: int = 5) -> str:
         """Implementation of find_similar_code tool."""

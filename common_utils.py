@@ -1,18 +1,56 @@
 """Common utilities shared across modules."""
 
 import json
+import logging
 import os
+import platform
 from pathlib import Path
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
+logger = logging.getLogger(__name__)
+
+VERSION = "0.1.0"
+
+
+def is_windows() -> bool:
+    """Return True when running on native Windows (not WSL)."""
+    return platform.system() == "Windows"
+
+
+def normalize_path(path: str) -> str:
+    """Normalize a file path for the current operating system.
+
+    Converts forward/backward slashes to the OS-native separator and
+    resolves ``~`` so that paths work on both Windows and Unix.
+    """
+    # Expand user home directory (works on all platforms)
+    expanded = os.path.expanduser(path)
+    # Normalize slashes and remove redundant separators
+    return str(Path(expanded).resolve())
+
 
 @lru_cache(maxsize=1)
 def get_storage_dir() -> Path:
-    """Get or create base storage directory. Cached for performance."""
-    storage_path = os.getenv('CODE_SEARCH_STORAGE', str(Path.home() / '.claude_code_search'))
-    storage_dir = Path(storage_path)
-    storage_dir.mkdir(parents=True, exist_ok=True)
+    """Get or create base storage directory. Cached for performance.
+
+    The directory is chosen by the following priority:
+    1. ``CODE_SEARCH_STORAGE`` environment variable (if set).
+    2. ``~/.claude_code_search`` (works on all platforms – ``~`` expands
+       to ``%USERPROFILE%`` on Windows and ``$HOME`` on Unix).
+    """
+    raw_path = os.getenv('CODE_SEARCH_STORAGE', '')
+    if raw_path:
+        storage_dir = Path(os.path.expanduser(raw_path)).resolve()
+    else:
+        storage_dir = Path.home() / '.claude_code_search'
+    try:
+        storage_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot create storage directory '{storage_dir}': {exc}\n"
+            "Set CODE_SEARCH_STORAGE to a writable path and try again."
+        ) from exc
     return storage_dir
 
 
@@ -22,14 +60,26 @@ def get_install_config_path(storage_dir: Optional[Path] = None) -> Path:
 
 
 def load_local_install_config(storage_dir: Optional[Path] = None) -> Dict[str, Any]:
-    """Load the local installation config if present."""
+    """Load the local installation config if present.
+
+    Returns an empty dict when the file does not exist or cannot be parsed,
+    and logs a warning on parse errors so users have visibility.
+    """
     config_path = get_install_config_path(storage_dir)
     if not config_path.exists():
         return {}
 
     try:
         return json.loads(config_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError as exc:
+        logger.warning(
+            "Corrupt install config at %s: %s – using defaults", config_path, exc
+        )
+        return {}
+    except OSError as exc:
+        logger.warning(
+            "Cannot read install config at %s: %s – using defaults", config_path, exc
+        )
         return {}
 
 
