@@ -1,5 +1,5 @@
 param(
-    [string]$RepoUrl = "https://github.com/FarhanAliRaza/claude-context-local",
+    [string]$RepoUrl = "https://github.com/nadiahariyah3272/claude-context-local",
     [string]$ProjectDir = "$env:LOCALAPPDATA\claude-context-local",
     [string]$StorageDir = $(if ($env:CODE_SEARCH_STORAGE) { $env:CODE_SEARCH_STORAGE } else { "$env:USERPROFILE\.claude_code_search" }),
     [string]$ModelName = $(if ($env:CODE_SEARCH_MODEL) { $env:CODE_SEARCH_MODEL } else { "google/embeddinggemma-300m" })

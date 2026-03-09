@@ -38,6 +38,10 @@ class TestMultiLanguageChunker:
         assert chunker.is_supported("test.c++")
         assert chunker.is_supported("test.cs")
         assert chunker.is_supported("test.rs")
+        assert chunker.is_supported("test.yaml")
+        assert chunker.is_supported("test.yml")
+        assert chunker.is_supported("test.toml")
+        assert chunker.is_supported("test.json")
         assert not chunker.is_supported("test.txt")
     
     def test_chunk_python_file(self, chunker, test_data_dir):
@@ -237,3 +241,59 @@ class TestMultiLanguageChunker:
         assert "Overview" in chunk_names
         assert "Kotlin Support" in chunk_names
         assert "section" in chunk_types
+
+    def test_chunk_yaml_file(self, chunker, test_data_dir):
+        """Test chunking YAML config files."""
+        file_path = test_data_dir / "config.yaml"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        chunk_types = {chunk.chunk_type for chunk in chunks}
+        all_tags = {tag for chunk in chunks for tag in (chunk.tags or [])}
+
+        assert "services" in chunk_names
+        assert "database" in chunk_names
+        assert "config_section" in chunk_types
+        assert "yaml" in all_tags
+        assert "config" in all_tags
+
+    def test_chunk_toml_file(self, chunker, test_data_dir):
+        """Test chunking TOML config files."""
+        file_path = test_data_dir / "project.toml"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        all_tags = {tag for chunk in chunks for tag in (chunk.tags or [])}
+
+        assert "project" in chunk_names
+        assert "tool" in chunk_names
+        assert "tool.ruff" in chunk_names
+        assert "toml" in all_tags
+        assert "config" in all_tags
+
+    def test_chunk_json_file(self, chunker, test_data_dir):
+        """Test chunking JSON config files."""
+        file_path = test_data_dir / "package.json"
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) > 0
+        chunk_names = {chunk.name for chunk in chunks if chunk.name}
+        all_tags = {tag for chunk in chunks for tag in (chunk.tags or [])}
+
+        assert "scripts" in chunk_names
+        assert "dependencies" in chunk_names
+        assert "json" in all_tags
+        assert "config" in all_tags
+
+    def test_invalid_yaml_falls_back_to_document_chunk(self, chunker, tmp_path):
+        """Invalid structured files should still index as a raw document chunk."""
+        file_path = tmp_path / "broken.yaml"
+        file_path.write_text("root:\n  - valid\n  invalid: [", encoding="utf-8")
+
+        chunks = chunker.chunk_file(str(file_path))
+
+        assert len(chunks) == 1
+        assert chunks[0].chunk_type == "document"
+        assert "raw" in chunks[0].tags

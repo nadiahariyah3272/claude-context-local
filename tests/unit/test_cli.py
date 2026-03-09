@@ -73,6 +73,15 @@ class TestCLICommands:
         assert "Install" in out
         assert "Register the MCP server" in out
 
+    def test_status_handles_unwritable_storage_dir(self, capsys):
+        """status command should fail gracefully when storage is not writable."""
+        with patch("scripts.cli.get_storage_dir", side_effect=RuntimeError("storage unavailable")):
+            cmd_status()
+
+        out = capsys.readouterr().out
+        assert "status could not access the storage directory" in out
+        assert "CODE_SEARCH_STORAGE" in out
+
     def test_unknown_command_exits_with_error(self):
         """An unknown command should exit with code 1."""
         result = subprocess.run(

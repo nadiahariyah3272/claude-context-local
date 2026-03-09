@@ -7,6 +7,7 @@ from typing import List, Optional
 from chunking.code_chunk import CodeChunk
 from chunking.tree_sitter import TreeSitterChunker, TreeSitterChunk
 from chunking.languages import LANGUAGE_MAP
+from chunking.structured_data_chunker import StructuredDataChunker, STRUCTURED_DATA_EXTENSION_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class MultiLanguageChunker:
     """Unified chunker supporting multiple programming languages."""
     # Supported extensions - derived from LANGUAGE_MAP
-    SUPPORTED_EXTENSIONS = set(LANGUAGE_MAP.keys())
+    SUPPORTED_EXTENSIONS = set(LANGUAGE_MAP.keys()) | set(STRUCTURED_DATA_EXTENSION_MAP.keys())
     
     # Common large/build/tooling directories to skip during traversal
     DEFAULT_IGNORED_DIRS = {
@@ -40,6 +41,7 @@ class MultiLanguageChunker:
         # Use AST chunker for Python (more mature implementation)
         # Use tree-sitter for other languages
         self.tree_sitter_chunker = TreeSitterChunker()
+        self.structured_data_chunker = StructuredDataChunker(root_path=root_path)
     
     def is_supported(self, file_path: str) -> bool:
         """Check if file type is supported.
@@ -68,6 +70,9 @@ class MultiLanguageChunker:
 
         # Use tree-sitter for all languages
         try:
+            if Path(file_path).suffix.lower() in STRUCTURED_DATA_EXTENSION_MAP:
+                return self.structured_data_chunker.chunk_file(file_path)
+
             tree_chunks = self.tree_sitter_chunker.chunk_file(file_path)
             # Convert TreeSitterChunk to CodeChunk
             return self._convert_tree_chunks(tree_chunks, file_path)
