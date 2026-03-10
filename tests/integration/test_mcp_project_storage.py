@@ -6,7 +6,6 @@ Phase 3: Updated to work with LanceDB-based CodeIndexManager.
 import json
 import pytest
 import numpy as np
-from pathlib import Path
 
 from mcp_server.code_search_server import CodeSearchServer
 from search.indexer import CodeIndexManager
