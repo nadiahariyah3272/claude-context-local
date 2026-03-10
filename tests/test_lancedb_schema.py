@@ -24,7 +24,6 @@ Schema design rationale:
     model that is the new default for GPU-accelerated search.
 """
 
-import tempfile
 from pathlib import Path
 
 import numpy as np
