@@ -1,4 +1,7 @@
-"""Integration tests for incremental indexing."""
+"""Integration tests for incremental indexing.
+
+Phase 3: Updated to work with LanceDB-based CodeIndexManager.
+"""
 
 import tempfile
 import time

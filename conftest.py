@@ -108,6 +108,9 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "embeddings: Embedding generation tests")
     config.addinivalue_line("markers", "chunking: Code chunking tests")
     config.addinivalue_line("markers", "search: Search functionality tests")
+    config.addinivalue_line("markers", "lancedb: LanceDB vector storage tests")
+    config.addinivalue_line("markers", "unsloth: Unsloth/Qwen3 embedding model tests")
+    config.addinivalue_line("markers", "gpu: Tests that need GPU hardware to be meaningful (informational marker — no auto-skip; add skipif guards in individual tests when needed)")
 
     # Patch AVAILABLE_MODELS with mock for integration tests
     try:

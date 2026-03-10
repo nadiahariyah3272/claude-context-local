@@ -1,4 +1,7 @@
-"""Integration test that follows the exact MCP tool implementation path."""
+"""Integration test that follows the exact MCP tool implementation path.
+
+Phase 3: Updated to work with LanceDB-based CodeIndexManager.
+"""
 
 import json
 import tempfile

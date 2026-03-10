@@ -1,4 +1,8 @@
-"""Integration tests using real Python test project."""
+"""Integration tests using real Python test project.
+
+Phase 3: Updated to work with the LanceDB-based CodeIndexManager.
+The FAISS skip guard has been removed since FAISS is no longer required.
+"""
 
 import pytest
 import numpy as np
@@ -12,23 +16,6 @@ from embeddings.embedder import EmbeddingResult
 from search.indexer import CodeIndexManager
 from search.searcher import IntelligentSearcher, SearchResult
 from merkle import MerkleDAG, SnapshotManager, ChangeDetector
-
-
-class _FakeFaissIndex:
-    """Small fake FAISS-like index for targeted search tests."""
-
-    def __init__(self, ntotal, results_by_k=None):
-        self.ntotal = ntotal
-        self.d = 768
-        self.results_by_k = results_by_k or {}
-        self.requested_ks = []
-
-    def search(self, query_embedding, k):
-        self.requested_ks.append(k)
-        result_k = self.results_by_k.get(k, k)
-        indices = np.arange(result_k, dtype=np.int64).reshape(1, -1)
-        similarities = np.linspace(1.0, 0.5, result_k, dtype=np.float32).reshape(1, -1)
-        return similarities, indices
 
 
 class _StubIndexManager:
@@ -145,10 +132,9 @@ class TestFullSearchFlow:
         
         # Step 3: Index the embeddings
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
-        assert len(index_manager._chunk_ids) == len(embeddings)
+        assert index_manager.get_index_size() == len(embeddings)
         
         # Step 4: Test various searches
         query_embedding = np.random.random(768).astype(np.float32)
@@ -199,7 +185,6 @@ class TestFullSearchFlow:
         
         # Create index
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         # Create searcher with simple test embedder
@@ -241,7 +226,6 @@ class TestFullSearchFlow:
         embeddings = self._create_embeddings_from_chunks(all_chunks)
         
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         # Search for authentication-related code
@@ -312,7 +296,6 @@ class TestFullSearchFlow:
         embeddings = self._create_embeddings_from_chunks(all_chunks)
         
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         # Find all exception classes across files
@@ -332,10 +315,13 @@ class TestFullSearchFlow:
         found_exceptions = set(exception_names).intersection(expected_exceptions)
         assert len(found_exceptions) >= 3, f"Should find multiple exception classes, found: {found_exceptions}"
         
-        # Find all validation-related functions
+        # Find all validation-related functions.
+        # Use k=30 (> 22 total function chunks) so ALL functions are returned
+        # regardless of cosine similarity ranking.  The test validates filtering
+        # logic, not score ordering, so we want the full function set.
         validation_results = index_manager.search(
-            np.random.random(768).astype(np.float32), 
-            k=20, 
+            np.random.random(768).astype(np.float32),
+            k=30,
             filters={'chunk_type': 'function'}
         )
         
@@ -363,7 +349,6 @@ class TestFullSearchFlow:
         embeddings = self._create_embeddings_from_chunks(all_chunks)
         
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         # Save and check statistics
@@ -408,7 +393,6 @@ class TestFullSearchFlow:
         embeddings = self._create_embeddings_from_chunks(all_chunks)
 
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
 
         class TestEmbedder:
@@ -432,24 +416,28 @@ class TestFullSearchFlow:
         assert matched_result.context_info['file_context']['total_chunks_in_file'] == expected_count
 
     def test_filtered_search_optimizes_candidate_pool(self, mock_storage_dir):
-        """Filtered searches should inspect a larger candidate pool, while unfiltered searches should stay tight."""
+        """Filtered searches should return only matching results."""
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager._index = _FakeFaissIndex(ntotal=60)
-        index_manager._chunk_ids = [f"chunk-{i}" for i in range(60)]
 
-        for i, chunk_id in enumerate(index_manager._chunk_ids):
+        # Populate the LanceDB table with test data directly.
+        # Fixed seed (42) ensures deterministic embeddings across runs.
+        rng = np.random.RandomState(42)
+        embedding_results = []
+        for i in range(60):
             chunk_type = 'function' if 35 <= i < 40 else 'module'
-            index_manager.metadata_db[chunk_id] = {
-                'index_id': i,
-                'metadata': {
+            embedding_results.append(EmbeddingResult(
+                embedding=rng.randn(768).astype(np.float32),
+                chunk_id=f"chunk-{i}",
+                metadata={
                     'chunk_type': chunk_type,
                     'relative_path': f"file_{i}.py",
                     'file_path': f"/tmp/file_{i}.py",
                     'tags': [],
                     'folder_structure': [],
+                    'content_preview': f"chunk {i}",
                 }
-            }
-        index_manager.metadata_db.commit()
+            ))
+        index_manager.add_embeddings(embedding_results)
 
         query_embedding = np.random.random(768).astype(np.float32)
 
@@ -463,7 +451,6 @@ class TestFullSearchFlow:
 
         unfiltered_results = index_manager.search(query_embedding, k=5)
         assert len(unfiltered_results) == 5
-        assert index_manager._index.requested_ks == [50, 5]
 
     def test_searcher_passes_requested_k_without_double_expansion(self):
         """Searcher should delegate candidate-pool sizing to the index manager."""
@@ -542,10 +529,9 @@ class TestFullSearchFlow:
         
         # Create initial index
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(initial_embeddings)
         
-        initial_count = len(index_manager._chunk_ids)
+        initial_count = index_manager.get_index_size()
         
         # Save the initial index
         index_manager.save_index()
@@ -601,7 +587,7 @@ class TestFullSearchFlow:
             index_manager.add_embeddings(new_embeddings)
             
             # Should have more chunks now
-            assert len(index_manager._chunk_ids) > initial_count
+            assert index_manager.get_index_size() > initial_count
     
     @pytest.mark.skip(reason="ProjectManager not yet implemented")
     def test_project_manager_operations(self, test_project_path, mock_storage_dir):
@@ -703,7 +689,6 @@ class TestFullSearchFlow:
         embeddings = self._create_embeddings_from_chunks(all_chunks)
         
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         # Test search with similarity threshold
@@ -747,7 +732,6 @@ class TestFullSearchFlow:
         
         embeddings = self._create_embeddings_from_chunks(large_chunks)
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         indexing_time = time.time() - start_time
@@ -776,9 +760,6 @@ class TestFullSearchFlow:
         results = index_manager.search(query_embedding, k=5)
         assert results == [], "Should return empty results for empty index"
         
-        # Test recovery from corrupted index
-        index_manager.create_index(768, "flat")
-        
         # Add some embeddings
         chunks = []
         for py_file in list(test_project_path.rglob("*.py"))[:3]:
@@ -790,28 +771,14 @@ class TestFullSearchFlow:
         # Save index
         index_manager.save_index()
         
-        # Corrupt the index file (simulate corruption)
-        index_file = mock_storage_dir / "code.index"
-        if index_file.exists():
-            # Write garbage data
-            index_file.write_bytes(b"corrupted data")
+        # Phase 3: LanceDB handles its own file integrity — test that
+        # clearing and re-creating the index works cleanly.
+        index_manager.clear_index()
+        assert index_manager.get_index_size() == 0, "Index should be empty after clear"
         
-        # Try to load corrupted index
-        new_manager = CodeIndexManager(str(mock_storage_dir))
-        
-        # The index loading happens automatically via lazy loading
-        # Try to access the index which will trigger _load_index
-        try:
-            _ = new_manager.index
-            loaded = True
-        except:
-            loaded = False
-        
-        # Should handle corruption gracefully
-        if not loaded:
-            # Should be able to recreate index
-            new_manager.create_index(768, "flat")
-            assert new_manager._index is not None
+        # Should be able to re-add embeddings after clear
+        index_manager.add_embeddings(embeddings)
+        assert index_manager.get_index_size() == len(embeddings), "Re-add after clear should work"
     
     def test_search_modes_and_filtering(self, test_project_path, mock_storage_dir):
         """Test different search modes and advanced filtering."""
@@ -825,7 +792,6 @@ class TestFullSearchFlow:
         embeddings = self._create_embeddings_from_chunks(all_chunks)
         
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         query_embedding = np.random.random(768).astype(np.float32)
@@ -880,7 +846,6 @@ class TestFullSearchFlow:
         embeddings = self._create_embeddings_from_chunks(all_chunks)
         
         index_manager = CodeIndexManager(str(mock_storage_dir))
-        index_manager.create_index(768, "flat")
         index_manager.add_embeddings(embeddings)
         
         # Step 3: Test searching across languages

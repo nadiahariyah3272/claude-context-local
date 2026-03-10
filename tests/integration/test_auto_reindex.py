@@ -1,4 +1,7 @@
-"""Test auto-reindex functionality."""
+"""Test auto-reindex functionality.
+
+Phase 3: Updated to work with LanceDB-based CodeIndexManager.
+"""
 
 import time
 from pathlib import Path

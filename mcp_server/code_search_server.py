@@ -65,6 +65,13 @@ class CodeSearchServer:
             project_dir = self.get_project_storage_dir(project_path)
             index_dir = project_dir / "index"
 
+            # Phase 3: check for LanceDB data directory (replaces the
+            # old ``code.index`` FAISS file check).  Also accept the
+            # legacy path for backward compatibility during migration.
+            lance_dir = index_dir / "lancedb"
+            if lance_dir.exists() and any(lance_dir.iterdir()):
+                return True
+            # Legacy FAISS check — kept for migration period.
             if index_dir.exists() and (index_dir / "code.index").exists():
                 return True
 
@@ -161,7 +168,8 @@ class CodeSearchServer:
         chunk_type: str = None,
         include_context: bool = True,
         auto_reindex: bool = True,
-        max_age_minutes: float = 5
+        max_age_minutes: float = 5,
+        project_path: str = None,
     ) -> str:
         """Implementation of search_code tool."""
         try:
@@ -177,7 +185,22 @@ class CodeSearchServer:
                     "suggestion": "Use a smaller value for k, e.g. search_code('query', k=10)."
                 })
 
-            logger.info(f"🔍 MCP REQUEST: search_code(query='{query}', k={k}, mode='{search_mode}', file_pattern={file_pattern}, chunk_type={chunk_type})")
+            logger.info(f"🔍 MCP REQUEST: search_code(query='{query}', k={k}, mode='{search_mode}', file_pattern={file_pattern}, chunk_type={chunk_type}, project_path={project_path})")
+
+            # ── Cross-project search ─────────────────────────────────────────
+            # When ``project_path`` is provided the search targets that project
+            # without changing ``self._current_project``.  This lets an AI
+            # agent query any indexed project while staying active in another.
+            if project_path is not None:
+                return self._search_project(
+                    query=query,
+                    project_path=str(Path(project_path).resolve()),
+                    k=k,
+                    search_mode=search_mode,
+                    file_pattern=file_pattern,
+                    chunk_type=chunk_type,
+                    include_context=include_context,
+                )
 
             if auto_reindex and self._current_project:
                 from search.incremental_indexer import IncrementalIndexer
@@ -228,16 +251,6 @@ class CodeSearchServer:
             )
             logger.info(f"Search returned {len(results)} results")
 
-            def make_snippet(preview: Optional[str]) -> str:
-                if not preview:
-                    return ""
-                for line in preview.split('\n'):
-                    s = line.strip()
-                    if s:
-                        snippet = ' '.join(s.split())
-                        return (snippet[:157] + '...') if len(snippet) > 160 else snippet
-                return ""
-
             formatted_results = []
             for result in results:
                 item = {
@@ -249,7 +262,7 @@ class CodeSearchServer:
                 }
                 if result.name:
                     item['name'] = result.name
-                snippet = make_snippet(result.content_preview)
+                snippet = self._make_snippet(result.content_preview)
                 if snippet:
                     item['snippet'] = snippet
                 formatted_results.append(item)
@@ -265,6 +278,93 @@ class CodeSearchServer:
             logger.error(error_msg, exc_info=True)
             suggestion = "Ensure the project is indexed (use index_directory) and the embedding model is loaded."
             return json.dumps({"error": error_msg, "suggestion": suggestion})
+
+    @staticmethod
+    def _make_snippet(preview: Optional[str]) -> str:
+        """Extract a one-line snippet from a content preview string."""
+        if not preview:
+            return ""
+        for line in preview.split('\n'):
+            s = line.strip()
+            if s:
+                snippet = ' '.join(s.split())
+                return (snippet[:157] + '...') if len(snippet) > 160 else snippet
+        return ""
+
+    def _search_project(
+        self,
+        query: str,
+        project_path: str,
+        k: int = 5,
+        search_mode: str = "auto",
+        file_pattern: str = None,
+        chunk_type: str = None,
+        include_context: bool = True,
+    ) -> str:
+        """Run a search against any indexed project without changing active state.
+
+        Used by ``search_code(project_path=...)`` to let an AI agent query a
+        different workspace's index while remaining active in its own project.
+        The caller's ``_current_project`` / ``_index_manager`` / ``_searcher``
+        are never mutated.
+        """
+        # Build a transient index manager + searcher for the target project.
+        # These local objects are garbage-collected when the method returns —
+        # they are never assigned to self, so the caller's active project
+        # state (_current_project / _index_manager / _searcher) is untouched.
+        project_dir = self.get_project_storage_dir(project_path)
+        index_dir = project_dir / "index"
+        index_dir.mkdir(exist_ok=True)
+        # CodeIndexManager is instantiated inline (not via get_index_manager)
+        # intentionally: get_index_manager mutates self._current_project, which
+        # would defeat the purpose of a context-free cross-project search.
+        target_manager = CodeIndexManager(str(index_dir))
+
+        if target_manager.get_index_size() == 0:
+            return json.dumps({
+                "error": f"Project not indexed: {project_path}",
+                "suggestion": f"Run index_directory('{project_path}') first, then retry."
+            })
+
+        from search.searcher import IntelligentSearcher
+        target_searcher = IntelligentSearcher(target_manager, self.embedder())
+
+        filters = {}
+        if file_pattern:
+            filters['file_pattern'] = [file_pattern]
+        if chunk_type:
+            filters['chunk_type'] = chunk_type
+
+        context_depth = 1 if include_context else 0
+        results = target_searcher.search(
+            query=query,
+            k=k,
+            search_mode=search_mode,
+            context_depth=context_depth,
+            filters=filters if filters else None,
+        )
+
+        formatted_results = []
+        for result in results:
+            item = {
+                'file': result.relative_path,
+                'lines': f"{result.start_line}-{result.end_line}",
+                'kind': result.chunk_type,
+                'score': round(result.similarity_score, 2),
+                'chunk_id': result.chunk_id,
+            }
+            if result.name:
+                item['name'] = result.name
+            snippet = self._make_snippet(result.content_preview)
+            if snippet:
+                item['snippet'] = snippet
+            formatted_results.append(item)
+
+        return json.dumps({
+            'query': query,
+            'project': project_path,
+            'results': formatted_results,
+        }, separators=(",", ":"))
 
     def index_directory(
         self,
@@ -435,7 +535,12 @@ class CodeSearchServer:
             project_dir = self.get_project_storage_dir(str(project_path))
             index_dir = project_dir / "index"
 
-            if not index_dir.exists() or not (index_dir / "code.index").exists():
+            # Phase 3: check for LanceDB directory (replaces old FAISS
+            # ``code.index`` check).  The project is considered indexed when
+            # the LanceDB subdirectory exists and contains at least one file.
+            lance_dir = index_dir / "lancedb"
+            has_lancedb = lance_dir.exists() and any(lance_dir.iterdir())
+            if not has_lancedb:
                 return json.dumps({
                     "error": f"Project not indexed: {project_path}",
                     "suggestion": f"Run index_directory('{project_path}') first"
