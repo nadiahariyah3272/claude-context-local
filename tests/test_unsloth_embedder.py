@@ -149,7 +149,7 @@ class TestQwen3CUDAInitialisation:
         # The model catalog deliberately does NOT set a device — that is
         # resolved at runtime by ``EmbeddingModel._resolve_device``.
         # We just verify there's no accidental override.
-        assert not hasattr(config, "device") or getattr(config, "device", None) is None
+        assert getattr(config, "device", None) is None
 
 
 # ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ The codebase is being migrated from FAISS to LanceDB.
 | Embedding model | `google/embeddinggemma-300m` (768-d) | `unsloth/Qwen3-Embedding-4B` (2560-d) on CUDA |
 | Row-level delete | Not supported (full rebuild needed) | Native `table.delete("file_path = '...'")` |
 
-### Current status
+### Current Status
 
 - **Phase 1** ✅ — Dependencies updated (`pyproject.toml`), LanceDB schema
   tests written and passing (`tests/test_lancedb_schema.py`).

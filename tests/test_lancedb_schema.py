@@ -64,6 +64,9 @@ class CodeChunkModel(LanceModel):
     # The actual embedding — LanceDB stores this as a FixedSizeList in the
     # underlying Arrow table, which allows efficient ANN indexing.
     text: str
+    # type: ignore is needed because LanceDB's Vector() is a runtime descriptor
+    # that mypy/pyright cannot verify statically — it generates a proper
+    # pyarrow FixedSizeList type at schema-construction time.
     vector: Vector(QWEN3_4B_EMBEDDING_DIM)  # type: ignore[valid-type]
     file_path: str
     chunk_index: int
@@ -136,7 +139,10 @@ def populated_table(lance_tmp_dir: Path, mock_chunks: list[dict]):
     # LanceDB connection is just a path — fully managed by our codebase.
     db = lancedb.connect(str(lance_tmp_dir))
 
-    # ``create_table`` infers the Arrow schema from the Pydantic model.
+    # ``create_table`` — we pass the schema explicitly to guarantee the
+    # Arrow types match our Pydantic definition even when the input is a
+    # list of plain dicts (LanceDB can infer types from dicts, but
+    # explicit is better than implicit for schema-sensitive code).
     table = db.create_table("code_chunks", data=mock_chunks, schema=CodeChunkModel.to_arrow_schema())
 
     return table
