@@ -1,10 +1,5 @@
 ```
-  ██████╗ ██╗       █████╗  ██╗   ██╗ ██████╗  ███████╗
- ██╔════╝ ██║      ██╔══██╗ ██║   ██║ ██╔══██╗ ██╔════╝
- ██║      ██║      ███████║ ██║   ██║ ██║  ██║ █████╗
- ██║      ██║      ██╔══██║ ██║   ██║ ██║  ██║ ██╔══╝
- ╚██████╗ ███████╗ ██║  ██║ ╚██████╔╝ ██████╔╝ ███████╗
-  ╚═════╝ ╚══════╝ ╚═╝  ╚═╝  ╚═════╝  ╚═════╝  ╚══════╝
+AGENT
 
   ██████╗  ██████╗  ███╗   ██╗ ████████╗ ███████╗ ██╗  ██╗ ████████╗
  ██╔════╝ ██╔═══██╗ ████╗  ██║ ╚══██╔══╝ ██╔════╝ ╚██╗██╔╝ ╚══██╔══╝
@@ -22,7 +17,6 @@
 
 ```
 
-[![Seeking Remote Work](https://img.shields.io/badge/🌍-Actively%20Seeking%20Remote%20Work-success?style=for-the-badge)](mailto:farhanalirazaazeemi@gmail.com)
 
 Claude Context without the cloud. Semantic code search that runs 100% locally using local embedding models on your own machine. No API keys, no costs, your code never leaves your machine.
 
