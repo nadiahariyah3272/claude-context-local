@@ -36,12 +36,6 @@ from embeddings.embedder import EmbeddingResult
 
 logger = logging.getLogger(__name__)
 
-# ── Embedding dimension ──────────────────────────────────────────────────
-# Imported from the model catalog so the schema stays in sync with the
-# configured embedding model.  The Phase 1 tests already validate that
-# CodeChunkModel.vector has exactly this many dimensions.
-from embeddings.model_catalog import QWEN3_4B_EMBEDDING_DIM
-
 # ── LanceDB table name ──────────────────────────────────────────────────
 TABLE_NAME = "code_chunks"
 
