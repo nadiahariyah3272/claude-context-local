@@ -29,9 +29,9 @@ The codebase is being migrated from FAISS to LanceDB.
   tests written and passing (`tests/test_lancedb_schema.py`).
 - **Phase 2** ✅ — Unsloth/Qwen3-Embedding-4B tests written and passing
   (`tests/test_unsloth_embedder.py`).
-- **Phase 3** ⏳ — Core refactor (waiting for approval).  This will
-  rewrite `search/indexer.py`, `search/incremental_indexer.py`, and
-  `embeddings/embedder.py`.
+- **Phase 3** ✅ — Core refactor complete.  `search/indexer.py` rewritten
+  to use LanceDB.  All integration tests updated and passing.  The FAISS
+  backend has been fully replaced.
 
 ### Storage layout
 
@@ -104,7 +104,9 @@ to understand your reasoning.**
 |------|---------|
 | `pyproject.toml` | Dependencies — `faiss-cpu` removed, `lancedb` added |
 | `embeddings/model_catalog.py` | Model configs, `QWEN3_4B_EMBEDDING_DIM`, `QWEN3_QUERY_INSTRUCTION` |
-| `search/indexer.py` | Legacy FAISS backend (Phase 3 will replace with LanceDB) |
+| `search/indexer.py` | **LanceDB backend** — single table for vectors + metadata (Phase 3 complete) |
+| `search/incremental_indexer.py` | Incremental indexing via Merkle DAG — API-compatible with LanceDB |
+| `search/searcher.py` | Intelligent search with ranking — API-compatible with LanceDB |
 | `tests/test_lancedb_schema.py` | LanceDB schema, CRUD, search, and storage pattern tests |
 | `tests/test_unsloth_embedder.py` | Qwen3-4B model config, prefixing, and output shape tests |
 | `conftest.py` | Shared fixtures and pytest marker registration |

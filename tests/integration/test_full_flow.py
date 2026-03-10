@@ -417,6 +417,7 @@ class TestFullSearchFlow:
         index_manager = CodeIndexManager(str(mock_storage_dir))
 
         # Populate the LanceDB table with test data directly.
+        # Fixed seed (42) ensures deterministic embeddings across runs.
         rng = np.random.RandomState(42)
         embedding_results = []
         for i in range(60):

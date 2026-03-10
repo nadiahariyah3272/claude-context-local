@@ -64,6 +64,9 @@ def _make_schema_class(dim: int) -> type:
     ns: dict = {
         "__annotations__": {
             "text": str,
+            # type: ignore — Vector(dim) is a runtime descriptor that generates a
+            # pyarrow FixedSizeList; mypy cannot verify it statically because
+            # the dimension is a runtime variable, not a literal.
             "vector": Vector(dim),   # type: ignore[valid-type]
             "file_path": str,
             "relative_path": str,
@@ -104,7 +107,10 @@ class CodeIndexManager:
     """
 
     def __init__(self, storage_dir: str = ""):
-        # Allow empty storage_dir for tests that pass no arguments
+        # Fallback for callers that omit storage_dir (e.g. legacy
+        # IncrementalIndexer() instantiation without arguments).  We
+        # default to a sub-directory under the centralised storage root
+        # so that data never ends up in the user's project workspace.
         if not storage_dir:
             from common_utils import get_storage_dir
             storage_dir = str(get_storage_dir() / "default_index")
@@ -243,8 +249,9 @@ class CodeIndexManager:
         if where_clause:
             query_builder = query_builder.where(where_clause)
 
-        # Request more results than k when filtering so we still have
-        # enough after post-filter.
+        # When filters are active, many ANN candidates may be discarded
+        # by the WHERE clause.  Fetch 10× candidates to increase the
+        # chance of returning the requested k results after filtering.
         fetch_k = k * 10 if filters else k
         try:
             df = query_builder.limit(fetch_k).to_pandas()
@@ -348,19 +355,28 @@ class CodeIndexManager:
         self._stats_cache = None
 
     def get_chunk_by_id(self, chunk_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve chunk metadata by its unique ID."""
+        """Retrieve chunk metadata by its unique ID.
+
+        Performance note: This uses a filtered scan rather than a
+        primary-key lookup because LanceDB does not have a built-in
+        unique-key index.  For typical project sizes (<100k chunks)
+        the latency is negligible.  If this becomes a bottleneck on
+        very large indices, consider adding a scalar index on the
+        ``chunk_id`` column.
+        """
         if self._table is None:
             return None
         try:
             safe_id = chunk_id.replace("'", "''")
-            # Use a full-table scan with a filter — LanceDB does not
-            # have a primary-key lookup, but the table is small enough
-            # that this is fast.
-            df = self._table.to_pandas()
-            matches = df[df["chunk_id"] == chunk_id]
-            if matches.empty:
+            df = (
+                self._table.search()
+                .where(f"chunk_id = '{safe_id}'")
+                .limit(1)
+                .to_pandas()
+            )
+            if df.empty:
                 return None
-            return self._row_to_metadata(matches.iloc[0])
+            return self._row_to_metadata(df.iloc[0])
         except Exception:
             return None
 
