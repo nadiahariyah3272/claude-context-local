@@ -5,6 +5,7 @@ Phase 3: Updated to work with LanceDB-based CodeIndexManager.
 
 import json
 import pytest
+from pathlib import Path
 
 from mcp_server.code_search_server import CodeSearchServer
 
@@ -109,3 +110,64 @@ class TestMCPProjectStorage:
         projects = projects_data.get("projects", [])
         for project in projects:
             assert "project_hash" in project, "Project should have a hash for isolation"
+
+    def test_switch_project_checks_lancedb_not_faiss(self):
+        """switch_project must accept a LanceDB-indexed project.
+
+        Before the fix, switch_project checked for code.index (FAISS) which
+        would always fail after the Phase 3 LanceDB migration.
+        """
+        # Index the test project via the standard path so it has a LanceDB dir.
+        self.server.index_test_project()
+        projects_result = json.loads(self.server.list_projects())
+        projects = projects_result.get("projects", [])
+        assert projects, "At least one project must be indexed"
+
+        # switch_project should succeed for any project that was indexed with
+        # LanceDB — it must NOT require a code.index file.
+        project_path = projects[0]["project_path"]
+        switch_result = json.loads(self.server.switch_project(project_path))
+        assert "error" not in switch_result, (
+            f"switch_project should not fail for a LanceDB-indexed project: "
+            f"{switch_result.get('error')}"
+        )
+        assert switch_result.get("success") is True
+
+    def test_cross_project_search_via_project_path(self):
+        """search_code(project_path=...) queries another project without changing active context.
+
+        This is the primary mechanism for an AI agent in one workspace to read
+        the semantic index of a different workspace.
+        """
+        # Index the test project.
+        self.server.index_test_project()
+        projects_result = json.loads(self.server.list_projects())
+        projects = projects_result.get("projects", [])
+        assert projects, "At least one project must be indexed"
+
+        target_path = projects[0]["project_path"]
+        active_before = self.server._current_project
+
+        # Search the indexed project while staying in the original context.
+        result = json.loads(
+            self.server.search_code("authentication", k=3, project_path=target_path)
+        )
+
+        # Active project must not change.
+        assert self.server._current_project == active_before, (
+            "search_code with project_path must not change the active project"
+        )
+
+        # Result includes the target project path and a results list.
+        assert "error" not in result, f"Cross-project search failed: {result.get('error')}"
+        assert "project" in result, "Response should include the queried project path"
+        assert result["project"] == target_path
+        assert "results" in result
+        assert isinstance(result["results"], list)
+
+    def test_cross_project_search_nonexistent_path_returns_error(self):
+        """search_code(project_path=...) with an unindexed path returns a clear error."""
+        result = json.loads(
+            self.server.search_code("anything", project_path="/nonexistent/path/to/project")
+        )
+        assert "error" in result, "Should return error for unindexed project path"
