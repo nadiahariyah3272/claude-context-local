@@ -143,18 +143,57 @@ class CodeIndexManager:
     # ------------------------------------------------------------------
 
     def _try_open_existing_table(self) -> None:
-        """Open the ``code_chunks`` table if it already exists on disk."""
+        """Open the ``code_chunks`` table if it already exists on disk.
+
+        When re-opening a table created during a previous indexing run we
+        also recover ``_embedding_dim`` and ``_schema_class`` from the
+        Arrow schema so that ``get_stats()`` reports the correct dimension
+        and ``add_embeddings()`` can detect model-change mismatches.
+        """
         try:
             names = self._db.table_names()
             if TABLE_NAME in names:
                 self._table = self._db.open_table(TABLE_NAME)
+
+                # ── Recover embedding dimension from the Arrow schema ──
+                # The ``vector`` column is stored as a FixedSizeList; its
+                # list_size is the embedding dimension used when the table
+                # was originally created.
+                self._recover_embedding_dim()
+
                 self._logger.info(
-                    "Opened existing LanceDB table '%s' with %d rows",
+                    "Opened existing LanceDB table '%s' with %d rows (dim=%s)",
                     TABLE_NAME,
                     self._table.count_rows(),
+                    self._embedding_dim or "unknown",
                 )
         except Exception as exc:
             self._logger.warning("Could not open existing LanceDB table: %s", exc)
+
+    def _recover_embedding_dim(self) -> None:
+        """Derive ``_embedding_dim`` and ``_schema_class`` from the opened table.
+
+        This is needed because ``_try_open_existing_table`` skips
+        ``_ensure_table`` (which normally sets these attributes).  Without
+        this, stats would report ``embedding_dimension: 0`` and
+        ``add_embeddings`` could not detect a model-change mismatch.
+        """
+        if self._table is None:
+            return
+        try:
+            import pyarrow as pa
+            schema = self._table.schema
+            vec_field = schema.field("vector")
+            # LanceDB stores vectors as FixedSizeList<float32, dim>.
+            if pa.types.is_fixed_size_list(vec_field.type):
+                dim = vec_field.type.list_size
+                self._embedding_dim = dim
+                self._schema_class = _make_schema_class(dim)
+        except Exception as exc:
+            # Log at warning — a missing/malformed vector column is
+            # not expected and could cause silent dimension-mismatch
+            # issues downstream.
+            self._logger.warning("Could not recover embedding dim: %s", exc)
 
     def _ensure_table(self, embedding_dim: int) -> None:
         """Create the LanceDB table if it doesn't exist yet.
@@ -193,6 +232,19 @@ class CodeIndexManager:
 
         embedding_dim = embedding_results[0].embedding.shape[0]
         self._ensure_table(embedding_dim)
+
+        # ── Validate dimension consistency ───────────────────────────
+        # If the user changes the embedding model (e.g. 768-d Gemma →
+        # 2560-d Qwen3) without clearing the index, the incoming vectors
+        # would silently fail on insert.  Detect this early and give a
+        # clear error message instead.
+        if self._embedding_dim is not None and embedding_dim != self._embedding_dim:
+            raise ValueError(
+                f"Embedding dimension mismatch: incoming vectors have "
+                f"dim={embedding_dim} but the existing LanceDB table was "
+                f"created with dim={self._embedding_dim}.  Clear the index "
+                f"(or delete the project storage) to switch models."
+            )
 
         rows: list[dict] = []
         for result in embedding_results:
@@ -334,6 +386,11 @@ class CodeIndexManager:
             if p.exists():
                 p.unlink()
 
+        # Remove stats.json so that get_stats() does not return stale
+        # data after the index has been cleared.
+        if self.stats_path.exists():
+            self.stats_path.unlink()
+
         self._logger.info("Index cleared")
 
     def save_index(self) -> None:
@@ -383,15 +440,26 @@ class CodeIndexManager:
     def get_similar_chunks(
         self, chunk_id: str, k: int = 5,
     ) -> List[Tuple[str, float, Dict[str, Any]]]:
-        """Find chunks similar to a given chunk (by its embedding)."""
+        """Find chunks similar to a given chunk (by its embedding).
+
+        Uses a filtered WHERE query to fetch only the target row's vector
+        rather than loading the entire table into a DataFrame.
+        """
         if self._table is None:
             return []
         try:
-            df = self._table.to_pandas()
-            matches = df[df["chunk_id"] == chunk_id]
-            if matches.empty:
+            # Fetch only the target row's vector via a filtered query
+            # instead of materializing the entire table (O(1) vs O(N)).
+            safe_id = chunk_id.replace("'", "''")
+            df = (
+                self._table.search()
+                .where(f"chunk_id = '{safe_id}'")
+                .limit(1)
+                .to_pandas()
+            )
+            if df.empty:
                 return []
-            vec = matches.iloc[0]["vector"]
+            vec = df.iloc[0]["vector"]
             if isinstance(vec, np.ndarray):
                 vec_arr = vec.astype(np.float32)
             else:

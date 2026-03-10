@@ -77,11 +77,10 @@ convention for this repository.  Comments should explain:
 ### Examples of good comments
 
 ```python
-# ── Lazy faiss import — will be replaced by LanceDB in Phase 3 ──────────
-try:
-    import faiss
-except ImportError:
-    faiss = None
+# ── LanceDB table — single-table storage for vectors + metadata ─────────
+# Replaces the old FAISS + SQLiteDict + pickle approach.  LanceDB is
+# embedded/serverless so no credentials or external servers are needed.
+self._db = lancedb.connect(str(self._lance_dir))
 
 # IMPORTANT: query_prefix is set so search queries are prefixed with the
 # retrieval instruction, but document_prefix is deliberately empty — the
@@ -114,7 +113,7 @@ to understand your reasoning.**
 ## Running Tests
 
 ```bash
-# Full suite (FAISS tests will be skipped)
+# Full suite (all tests use LanceDB backend)
 uv run python tests/run_tests.py
 
 # LanceDB tests only

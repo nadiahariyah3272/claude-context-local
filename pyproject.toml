@@ -51,7 +51,6 @@ dependencies = [
     # sentence-transformers: kept for model loading; also used by the Qwen3
     # embedding pipeline when running without the full unsloth stack.
     "sentence-transformers>=5.1.0",
-    "sqlitedict>=2.1.0",
     "tree-sitter>=0.20.0",
     "tree-sitter-c>=0.24.1",
     "tree-sitter-c-sharp>=0.23.1",
