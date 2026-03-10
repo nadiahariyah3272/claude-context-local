@@ -284,18 +284,33 @@ class CodeIndexManager:
         """Search for similar code chunks via vector similarity.
 
         Returns a list of ``(chunk_id, similarity_score, metadata_dict)``
-        tuples, ordered by descending similarity.  The similarity score
-        is ``1 / (1 + L2_distance)`` so that higher is better (matching
-        the FAISS inner-product convention used by the old backend).
+        tuples ordered by descending similarity.
+
+        **Metric choice — cosine similarity**
+        Modern dense embedding models (Qwen3-Embedding, Gemma-Embedding,
+        SFR-Embedding) L2-normalise their output vectors.  For normalised
+        vectors, cosine similarity is the natural and most interpretable
+        metric: 1.0 = identical direction, 0.0 = orthogonal, scores in
+        a well-defined [0, 1] range.
+
+        L2 distance was kept from the legacy FAISS backend but is not the
+        right default here.  The old ``1 / (1 + L2)`` conversion produced
+        opaque, hard-to-compare scores that varied with embedding magnitude.
+        Using cosine via LanceDB's ``.metric("cosine")`` gives callers a
+        score they can interpret directly:  ``score >= 0.7`` → strong match,
+        ``score >= 0.5`` → moderate match, etc.
         """
         if self._table is None or self._table.count_rows() == 0:
             return []
 
         query_vec = query_embedding.reshape(-1).tolist()
 
-        # Build the LanceDB query.  Apply SQL-like WHERE filters when
-        # the caller restricts to a specific file, chunk type, etc.
-        query_builder = self._table.search(query_vec)
+        # Build the LanceDB query.  Use cosine metric and apply SQL-like
+        # WHERE filters when the caller restricts to a file, chunk type, etc.
+        # .metric("cosine") tells LanceDB to return cosine *distance* in the
+        # _distance column (0 = identical, 1 = completely different for
+        # normalised vectors), which we convert to similarity below.
+        query_builder = self._table.search(query_vec).metric("cosine")
 
         where_clause = self._build_where_clause(filters)
         if where_clause:
@@ -313,9 +328,11 @@ class CodeIndexManager:
 
         results: list[tuple[str, float, dict]] = []
         for _, row in df.iterrows():
-            # Convert L2 distance to a similarity score in [0, 1].
+            # Convert cosine distance → cosine similarity.
+            # LanceDB cosine distance = 1 - cosine_similarity for normalised
+            # vectors, so similarity = 1 - distance.  Result is in [0, 1].
             distance = row.get("_distance", 0.0)
-            similarity = 1.0 / (1.0 + distance)
+            similarity = max(0.0, 1.0 - float(distance))
 
             metadata = self._row_to_metadata(row)
             chunk_id = row.get("chunk_id", "")
@@ -518,7 +535,19 @@ class CodeIndexManager:
             self._logger.warning("Failed to write stats: %s", exc)
 
     def _compute_stats(self) -> Dict[str, Any]:
-        """Build statistics from the current table contents."""
+        """Build statistics from the current table contents.
+
+        Uses a two-tier scan strategy to avoid loading the large 'vector' column:
+
+        1. **Preferred** — column projection via the Lance dataset (requires the
+           ``lance`` package to be installed separately).  Skips the vector
+           column entirely — for a 2560-d Qwen3 model with 10 000 chunks this
+           saves ~100 MB of data transfer.
+
+        2. **Fallback** — full ``to_pandas()`` scan.  Loads all columns including
+           vectors, then immediately discards the vector data before Python-side
+           aggregation.  Always available; just slightly less memory-efficient.
+        """
         total = self.get_index_size()
 
         file_counts: Dict[str, int] = {}
@@ -527,8 +556,31 @@ class CodeIndexManager:
         tag_counts: Dict[str, int] = {}
 
         if self._table is not None and total > 0:
+            df = None
             try:
-                df = self._table.to_pandas()
+                # Preferred path: column projection via the Lance dataset API.
+                # to_lance() returns the underlying lance.LanceDataset; its
+                # to_table(columns=[...]) performs a columnar scan without
+                # touching the vector column.  Requires the 'lance' package.
+                arrow_tbl = self._table.to_lance().to_table(
+                    columns=["relative_path", "folder_structure", "chunk_type", "tags"]
+                )
+                df = arrow_tbl.to_pandas()
+            except Exception:
+                pass  # Fall through to the full-scan fallback below.
+
+            if df is None:
+                # Fallback: full table scan, then select only the needed columns.
+                # This loads the vector column initially but discards it before
+                # any Python-side iteration, limiting per-row overhead.
+                try:
+                    full_df = self._table.to_pandas()
+                    needed = ["relative_path", "folder_structure", "chunk_type", "tags"]
+                    df = full_df[[c for c in needed if c in full_df.columns]]
+                except Exception as exc:
+                    self._logger.warning("Failed to compute stats: %s", exc)
+
+            if df is not None:
                 for _, row in df.iterrows():
                     rp = row.get("relative_path", "unknown")
                     file_counts[rp] = file_counts.get(rp, 0) + 1
@@ -541,8 +593,6 @@ class CodeIndexManager:
 
                     for tag in json.loads(row.get("tags", "[]") or "[]"):
                         tag_counts[tag] = tag_counts.get(tag, 0) + 1
-            except Exception as exc:
-                self._logger.warning("Failed to compute stats: %s", exc)
 
         stats: Dict[str, Any] = {
             "total_chunks": total,
@@ -591,20 +641,27 @@ class CodeIndexManager:
                 safe = str(value).replace("'", "''")
                 clauses.append(f"chunk_type = '{safe}'")
             elif key == "folder_structure":
-                # folder_structure is JSON-encoded; use LIKE for substring match.
+                # folder_structure is stored as a JSON-encoded list string.
+                # Use JSON-token matching ("%"folder"%" with surrounding quotes)
+                # to prevent substring false-positives.  For example,
+                # filtering for folder "src" must NOT match "srcgen".
                 folders = value if isinstance(value, list) else [value]
                 fc = []
                 for folder in folders:
-                    safe = folder.replace("'", "''")
-                    fc.append(f"folder_structure LIKE '%{safe}%'")
+                    safe = folder.replace("'", "''").replace('"', '""')
+                    fc.append(f'folder_structure LIKE \'%"{safe}"%\'')
                 if fc:
                     clauses.append("(" + " OR ".join(fc) + ")")
             elif key == "tags":
+                # Same JSON-token matching strategy as folder_structure.
+                # Filtering for tag "auth" must NOT match "oauth" or
+                # "authentication" — surrounding quotes ensure exact token
+                # boundaries within the JSON-encoded list string.
                 tags = value if isinstance(value, list) else [value]
                 tc = []
                 for tag in tags:
-                    safe = tag.replace("'", "''")
-                    tc.append(f"tags LIKE '%{safe}%'")
+                    safe = tag.replace("'", "''").replace('"', '""')
+                    tc.append(f'tags LIKE \'%"{safe}"%\'')
                 if tc:
                     clauses.append("(" + " OR ".join(tc) + ")")
 

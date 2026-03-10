@@ -44,8 +44,10 @@ All data is stored under a single root managed by `common_utils.get_storage_dir(
 └── projects/
     └── {project_name}_{hash}/
         ├── project_info.json           # Project metadata
-        ├── lancedb/                    # ← NEW: LanceDB table directory
-        │   └── code_chunks.lance/      #   (vectors + metadata together)
+        ├── index/                      # All index artefacts for this project
+        │   ├── lancedb/                # ← LanceDB table directory
+        │   │   └── code_chunks.lance/  #   (vectors + metadata together)
+        │   └── stats.json              # Cached index statistics
         └── snapshots/                  # Merkle tree snapshots
 ```
 

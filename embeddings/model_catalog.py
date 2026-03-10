@@ -13,8 +13,19 @@ DEFAULT_EMBEDDING_MODEL = "google/embeddinggemma-300m"
 # hidden_size (2560 for the 4B variant).
 QWEN3_4B_EMBEDDING_DIM = 2560
 QWEN3_QUERY_INSTRUCTION = (
-    "Instruct: Given a code search query, retrieve relevant code chunks "
-    "from a Python codebase\nQuery: "
+    "Instruct: Given a code search query, retrieve the most relevant code chunks "
+    "from a software codebase\nQuery:"
+    # Format follows the Qwen3-Embedding reference implementation exactly:
+    #   def get_detailed_instruct(task_description, query):
+    #       return f'Instruct: {task_description}\nQuery:{query}'
+    # No trailing space — the query text is appended directly after "Query:".
+    #
+    # "software codebase" is intentionally language-agnostic: this system
+    # indexes Python, JavaScript, TypeScript, Go, Java, Rust, Svelte, and more.
+    # Using a language-specific phrase like "Python codebase" would steer the
+    # model toward Python-only retrieval and degrade quality for other languages.
+    # Per the model card: "developers customize the instruct according to their
+    # specific scenarios, tasks, and languages."
 )
 
 

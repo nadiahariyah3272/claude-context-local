@@ -315,10 +315,13 @@ class TestFullSearchFlow:
         found_exceptions = set(exception_names).intersection(expected_exceptions)
         assert len(found_exceptions) >= 3, f"Should find multiple exception classes, found: {found_exceptions}"
         
-        # Find all validation-related functions
+        # Find all validation-related functions.
+        # Use k=30 (> 22 total function chunks) so ALL functions are returned
+        # regardless of cosine similarity ranking.  The test validates filtering
+        # logic, not score ordering, so we want the full function set.
         validation_results = index_manager.search(
-            np.random.random(768).astype(np.float32), 
-            k=20, 
+            np.random.random(768).astype(np.float32),
+            k=30,
             filters={'chunk_type': 'function'}
         )
         

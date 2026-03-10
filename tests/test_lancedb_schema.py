@@ -393,14 +393,20 @@ class TestLanceDBLocalStorage:
         """Verify the centralised storage pattern: all database files live
         under a dedicated storage directory, NOT inside the user's project.
 
-        This simulates how the refactored ``CodeIndexManager`` will work:
+        This simulates how ``CodeIndexManager`` works at runtime:
             1. ``get_storage_dir()`` returns ``~/.claude_code_search/``
-            2. The project DB is created at ``<storage>/projects/<name>/lancedb/``
+            2. The project DB is at
+               ``<storage>/projects/<name>_<hash>/index/lancedb/``
             3. The user's actual project directory has ZERO database files
 
         This is a key usability requirement — other tools (e.g. code-index-mcp)
         store databases in the workspace itself, cluttering ``git status`` and
         requiring ``.gitignore`` entries.  We explicitly avoid that.
+
+        Note: This test simulates the pattern using a simplified path
+        (``my_project_abc123/lancedb/``) to validate that LanceDB creates
+        files only inside the given directory.  The full runtime path with
+        the ``index/`` sub-layer is covered by integration tests.
         """
         # Simulate a user workspace (should remain untouched).
         workspace = tmp_path / "my_project"
