@@ -527,27 +527,27 @@ That keeps the retrieval stack unchanged while still letting you move to a domai
 
 Data is stored in the configured storage directory:
 
-```
+```text
 ~/.claude_code_search/
 ├── models/          # Downloaded models
-├── index/           # FAISS indices and metadata
-│   ├── code.index   # Vector index
-│   ├── metadata.db  # Chunk metadata (SQLite)
+├── index/           # LanceDB database and metadata
+│   ├── data.lance   # Combined vector index and chunk metadata
 │   └── stats.json   # Index statistics
+
 ```
 
 ## Performance
 
-- **Model size**: ~1.2GB (EmbeddingGemma-300m and caches)
-- **Embedding dimension**: 768 (can be reduced for speed)
-- **Index types**: Flat (exact) or IVF (approximate) based on dataset size
-- **Batch processing**: Configurable batch sizes for embedding generation
+* **Model size**: ~1.2GB (EmbeddingGemma-300m and caches)
+* **Embedding dimension**: 768 (can be reduced for speed)
+* **Index types**: LanceDB handles exact (Flat) and approximate nearest neighbors (ANN)
+* **Batch processing**: Configurable batch sizes for embedding generation
 
 Tips:
 
-- First index on a large repo will take time (model load + chunk + embed). Subsequent runs are incremental.
-- With GPU FAISS, searches on large indexes are significantly faster.
-- Embeddings automatically use CUDA (NVIDIA) or MPS (Apple) if available.
+* First index on a large repo will take time (model load + chunk + embed). Subsequent runs are incremental.
+* With GPU acceleration, embedding generation for large repositories is significantly faster.
+* Embeddings automatically use CUDA (NVIDIA) or MPS (Apple) if available.
 
 ## Troubleshooting
 
@@ -557,6 +557,7 @@ Run the built-in health checker to identify common issues:
 
 ```bash
 python scripts/cli.py doctor
+
 ```
 
 This checks Python version, dependencies, storage paths, model cache, and platform-specific concerns (WSL2, Windows path mismatches, etc.).
@@ -567,6 +568,7 @@ If you are still stuck after `doctor`, run:
 python scripts/cli.py setup-guide
 python scripts/cli.py paths
 python scripts/cli.py status
+
 ```
 
 ### Common Issues
@@ -579,8 +581,14 @@ python scripts/cli.py status
 | WSL2 / Git Bash token mismatch | Run `python scripts/cli.py doctor` to confirm Windows interop. If Hugging Face tokens cached on Windows are not visible in the current shell, export `HF_TOKEN` explicitly. |
 | No search results | Re-index the repository, then run `python scripts/cli.py status` to confirm the project was indexed. |
 | Memory pressure during indexing | Try a smaller embedding model or index a smaller repository first to validate the setup end to end. |
-| FAISS GPU not used | Ensure `nvidia-smi` works and CUDA drivers are installed, then re-run the installer so it can select the GPU FAISS package when available. |
+| GPU acceleration not used | Ensure `nvidia-smi` works and CUDA drivers are installed. The embedding model generation relies on PyTorch/CUDA availability. |
 | Need to work fully offline | We already prefer cached models automatically; you can also set `HF_HUB_OFFLINE=1`. |
+
+```
+
+Would you like me to scan any of the other documentation files in this PR (like `agents.md` or the setup guide) to see if FAISS is still lingering around there too?
+
+```
 
 ### Ignored directories (for speed and noise reduction)
 
@@ -599,6 +607,6 @@ This is a research project focused on intelligent code chunking and search. Feel
 
 Licensed under the GNU General Public License v3.0 (GPL-3.0). See the `LICENSE` file for details.
 
-## Inspiration
+## Contributions
 
-This project draws inspiration from [zilliztech/claude-context](https://github.com/zilliztech/claude-context). I adapted the concepts to a Python implementation with fully local embeddings.
+This is a fork of the [claude-context-local](https://github.com/zilliztech/claude-context) created by Zilliztech.
