@@ -65,6 +65,13 @@ class CodeSearchServer:
             project_dir = self.get_project_storage_dir(project_path)
             index_dir = project_dir / "index"
 
+            # Phase 3: check for LanceDB data directory (replaces the
+            # old ``code.index`` FAISS file check).  Also accept the
+            # legacy path for backward compatibility during migration.
+            lance_dir = index_dir / "lancedb"
+            if lance_dir.exists() and any(lance_dir.iterdir()):
+                return True
+            # Legacy FAISS check — kept for migration period.
             if index_dir.exists() and (index_dir / "code.index").exists():
                 return True
 

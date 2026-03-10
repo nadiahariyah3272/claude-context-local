@@ -1,12 +1,7 @@
-"""Integration tests for incremental indexing."""
+"""Integration tests for incremental indexing.
 
-# NOTE: These tests exercise the legacy FAISS-based CodeIndexManager.
-# They will be rewritten to use LanceDB in Phase 3.
-try:
-    import faiss  # noqa: F401
-    _HAS_FAISS = True
-except ImportError:
-    _HAS_FAISS = False
+Phase 3: Updated to work with LanceDB-based CodeIndexManager.
+"""
 
 import tempfile
 import time
@@ -14,8 +9,6 @@ from pathlib import Path
 from unittest import TestCase
 
 import pytest
-
-pytestmark = pytest.mark.skipif(not _HAS_FAISS, reason="faiss-cpu not installed (replaced by lancedb in Phase 1)")
 
 from merkle.merkle_dag import MerkleDAG
 from merkle.snapshot_manager import SnapshotManager

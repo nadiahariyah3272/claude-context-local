@@ -1,20 +1,13 @@
-"""Integration test that follows the exact MCP tool implementation path."""
+"""Integration test that follows the exact MCP tool implementation path.
 
-# NOTE: These tests exercise the legacy FAISS-based CodeIndexManager.
-# They will be rewritten to use LanceDB in Phase 3.
-try:
-    import faiss  # noqa: F401
-    _HAS_FAISS = True
-except ImportError:
-    _HAS_FAISS = False
+Phase 3: Updated to work with LanceDB-based CodeIndexManager.
+"""
 
 import json
 import tempfile
 import shutil
 from pathlib import Path
 import pytest
-
-pytestmark = pytest.mark.skipif(not _HAS_FAISS, reason="faiss-cpu not installed (replaced by lancedb in Phase 1)")
 
 from search.incremental_indexer import IncrementalIndexer
 from search.indexer import CodeIndexManager
