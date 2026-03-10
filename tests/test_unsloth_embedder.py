@@ -23,7 +23,7 @@ Key architectural decisions tested here
    ``CodeEmbedder._encode_texts`` applies them at the right time.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
