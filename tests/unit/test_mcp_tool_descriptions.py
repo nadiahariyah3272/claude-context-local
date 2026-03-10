@@ -3,8 +3,6 @@
 Phase 3: Updated to work with LanceDB-based CodeIndexManager.
 """
 
-import pytest
-
 from mcp_server.code_search_server import CodeSearchServer
 from mcp_server.code_search_mcp import CodeSearchMCP
 
