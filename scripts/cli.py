@@ -290,7 +290,9 @@ def cmd_doctor() -> None:
 
     # 7. Key Python packages
     for pkg_name, import_names in [
-        ("faiss-cpu", ("faiss",)),
+        ("lancedb", ("lancedb",)),
+        ("pyarrow", ("pyarrow",)),
+        ("pandas", ("pandas",)),
         ("sentence-transformers", ("sentence_transformers",)),
         ("fastmcp", ("fastmcp",)),
         ("mcp", ("mcp", "mcp.server.fastmcp")),
