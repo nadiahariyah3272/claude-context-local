@@ -1,5 +1,14 @@
 """Integration tests using real Python test project."""
 
+# NOTE: These tests exercise the legacy FAISS-based CodeIndexManager.
+# They will be rewritten to use LanceDB in Phase 3.  Until then, they
+# are skipped when faiss-cpu is not installed.
+try:
+    import faiss  # noqa: F401
+    _HAS_FAISS = True
+except ImportError:
+    _HAS_FAISS = False
+
 import pytest
 import numpy as np
 import json
@@ -12,6 +21,8 @@ from embeddings.embedder import EmbeddingResult
 from search.indexer import CodeIndexManager
 from search.searcher import IntelligentSearcher, SearchResult
 from merkle import MerkleDAG, SnapshotManager, ChangeDetector
+
+pytestmark = pytest.mark.skipif(not _HAS_FAISS, reason="faiss-cpu not installed (replaced by lancedb in Phase 1)")
 
 
 class _FakeFaissIndex:

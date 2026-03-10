@@ -1,8 +1,18 @@
 """Test auto-reindex functionality."""
 
+# NOTE: This test exercises the legacy FAISS-based CodeIndexManager.
+# It will be rewritten for LanceDB in Phase 3.
+try:
+    import faiss  # noqa: F401
+    _HAS_FAISS = True
+except ImportError:
+    _HAS_FAISS = False
+
 import time
 from pathlib import Path
 import pytest
+
+pytestmark = pytest.mark.skipif(not _HAS_FAISS, reason="faiss-cpu not installed (replaced by lancedb in Phase 1)")
 
 from search.incremental_indexer import IncrementalIndexer
 from search.indexer import CodeIndexManager

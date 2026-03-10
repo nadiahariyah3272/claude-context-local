@@ -1,4 +1,13 @@
-"""Vector index management with FAISS and metadata storage."""
+"""Vector index management with FAISS and metadata storage.
+
+NOTE (Phase 1 transition): faiss-cpu has been removed from the required
+dependencies in favour of LanceDB.  The full FAISS→LanceDB migration will
+happen in Phase 3.  Until then, this module imports faiss lazily — if it
+is not installed the class is still importable, but FAISS-specific methods
+will raise at call time.  This avoids breaking the test collector for the
+new LanceDB and Unsloth test suites while keeping existing integration
+tests functional when faiss is present.
+"""
 
 import os
 import json
@@ -8,16 +17,37 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import asdict
 import numpy as np
-import faiss
+
+# ── Lazy faiss import — will be replaced by LanceDB in Phase 3 ──────────
+try:
+    import faiss  # type: ignore[import-untyped]
+except ImportError:
+    faiss = None  # type: ignore[assignment]
+
 from sqlitedict import SqliteDict
 from embeddings.embedder import EmbeddingResult
 from chunking.code_chunk import CodeChunk
 
 
 class CodeIndexManager:
-    """Manages FAISS vector index and metadata storage for code chunks."""
+    """Manages FAISS vector index and metadata storage for code chunks.
+
+    NOTE: This class will be refactored to use LanceDB in Phase 3.
+    Until then, it requires faiss-cpu to be installed separately
+    (``pip install faiss-cpu``).
+    """
     
     def __init__(self, storage_dir: str):
+        # Guard: fail fast with a helpful message if faiss was not installed.
+        # Phase 3 will replace this entire class with a LanceDB backend.
+        if faiss is None:
+            raise ImportError(
+                "faiss-cpu is no longer a required dependency (replaced by "
+                "lancedb).  Install it manually with `pip install faiss-cpu` "
+                "to use the legacy FAISS backend, or wait for the Phase 3 "
+                "LanceDB migration."
+            )
+
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         

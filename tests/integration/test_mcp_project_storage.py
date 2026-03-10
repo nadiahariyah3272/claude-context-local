@@ -1,7 +1,17 @@
 """Test MCP server project-specific storage functionality."""
 
+# NOTE: This test exercises the legacy FAISS-based CodeIndexManager via
+# CodeSearchServer.  It will be rewritten for LanceDB in Phase 3.
+try:
+    import faiss  # noqa: F401
+    _HAS_FAISS = True
+except ImportError:
+    _HAS_FAISS = False
+
 import json
 import pytest
+
+pytestmark = pytest.mark.skipif(not _HAS_FAISS, reason="faiss-cpu not installed (replaced by lancedb in Phase 1)")
 
 from mcp_server.code_search_server import CodeSearchServer
 
